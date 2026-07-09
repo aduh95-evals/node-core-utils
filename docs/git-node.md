@@ -28,8 +28,10 @@ A custom Git command for managing pull requests. You can run it as
     - [Usage](#usage)
   - [`git node status`](#git-node-status)
     - [Example](#example-2)
-  - [`git node wpt`](#git-node-wpt)
+  - [`git node benchmark`](#git-node-benchmark)
     - [Example](#example-3)
+  - [`git node wpt`](#git-node-wpt)
+    - [Example](#example-4)
 
 ## `git node land`
 
@@ -532,6 +534,58 @@ Upstream:  upstream
 Branch:    main
 ```
 
+## `git node benchmark`
+
+Trigger the [`benchmark.yml`][] GitHub Actions workflow on a pull request. The
+command fetches the PR, lets you pick which benchmark categories to run (the
+folders in [`benchmark/`][]), and dispatches the workflow with the PR number and
+its head commit.
+
+```
+git-node benchmark <identifier>
+
+Trigger the benchmark GitHub Actions workflow for a pull request
+
+Positionals:
+  identifier  ID or URL of the pull request                            [string] [required]
+
+Options:
+  --version         Show version number                                          [boolean]
+  --help            Show help                                                    [boolean]
+  --owner, -o       GitHub owner of the PR repository         [string] [default: "nodejs"]
+  --repo, -r        GitHub repository of the PR                 [string] [default: "node"]
+  --workflow-owner  GitHub owner of the repository hosting the benchmark workflow
+                    (defaults to the PR owner)                                     [string]
+  --workflow-repo   GitHub repository hosting the benchmark workflow (defaults to the PR
+                    repository)                                                   [string]
+  --workflow        The workflow file to dispatch   [string] [default: "benchmark.yml"]
+  --ref             The git ref of the workflow repository to run the workflow from
+                                                                 [string] [default: "main"]
+  --category, -c    Benchmark categories to run (skips the interactive prompt)     [array]
+  --filter          A substring to restrict the benchmarks to run in a category   [string]
+  --runs            How many times to repeat each benchmark                       [number]
+```
+
+The workflow is dispatched on the PR's repository by default. When the workflow
+lives in a different repository (for example a fork that hosts `benchmark.yml`),
+pass `--workflow-owner`/`--workflow-repo`, and the PR repository is forwarded to
+the workflow so it fetches the PR from the right place.
+
+### Example
+
+```bash
+# Interactively pick benchmark categories to run on nodejs/node#12344
+$ git node benchmark 12344
+# is equivalent to
+$ git node benchmark https://github.com/nodejs/node/pull/12344
+
+# Run specific categories non-interactively, repeating each benchmark 10 times
+$ git node benchmark 12344 --category buffers --category url --runs 10
+
+# Dispatch the workflow hosted on a fork for a nodejs/node PR
+$ git node benchmark 12344 --workflow-owner my-user --workflow-repo node
+```
+
 ## `git node wpt`
 
 Update or patch the Web Platform Tests in core.
@@ -568,3 +622,5 @@ $ git node wpt url --commit=43feb7f612fe9160639e09a47933a29834904d69
 
 [node.js abi version registry]: https://github.com/nodejs/node/blob/main/doc/abi_version_registry.json
 [Security Release Process]: https://github.com/nodejs/node/blob/main/doc/contributing/security-release-process.md
+[`benchmark.yml`]: https://github.com/nodejs/node/blob/main/.github/workflows/benchmark.yml
+[`benchmark/`]: https://github.com/nodejs/node/tree/main/benchmark
