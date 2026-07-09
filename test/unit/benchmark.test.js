@@ -191,6 +191,20 @@ describe('BenchmarkSession', () => {
     });
   });
 
+  it('suggests a gh command to comment the run link on the PR', async() => {
+    cli.promptCheckbox.resolves(['buffers']);
+    const session = new BenchmarkSession(cli, request, { ...baseArgv });
+    await session.start();
+
+    const suggestion = cli.info.getCalls()
+      .map((call) => call.args[0])
+      .find((message) => message.includes('gh pr comment'));
+    assert.ok(suggestion);
+    assert.match(
+      suggestion,
+      /gh pr comment https:\/\/github\.com\/nodejs\/node\/pull\/123 -b 'Benchmark GHA: https:\/\/github\.com\/nodejs\/node\/actions\/workflows\/benchmark\.yml'/);
+  });
+
   it('benchmarks the provided commit instead of the PR head', async() => {
     cli.promptCheckbox.resolves(['buffers']);
     const session = new BenchmarkSession(cli, request, {
