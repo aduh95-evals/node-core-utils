@@ -537,9 +537,10 @@ Branch:    main
 ## `git node benchmark`
 
 Trigger the [`benchmark.yml`][] GitHub Actions workflow on a pull request. The
-command fetches the PR, lets you pick which benchmark categories to run (the
-folders in [`benchmark/`][]), and dispatches the workflow with the PR number and
-its head commit.
+command fetches the PR, then prompts you to pick which benchmark categories to
+run (the folders in [`benchmark/`][] at the PR head). Categories whose files are
+touched by the PR are checked by default. It then dispatches the workflow with
+the PR number and its head commit.
 
 ```
 git-node benchmark <identifier>
@@ -561,7 +562,6 @@ Options:
   --workflow        The workflow file to dispatch   [string] [default: "benchmark.yml"]
   --ref             The git ref of the workflow repository to run the workflow from
                                                                  [string] [default: "main"]
-  --category, -c    Benchmark categories to run (skips the interactive prompt)     [array]
   --filter          A substring to restrict the benchmarks to run in a category   [string]
   --runs            How many times to repeat each benchmark                       [number]
 ```
@@ -575,12 +575,13 @@ the workflow so it fetches the PR from the right place.
 
 ```bash
 # Interactively pick benchmark categories to run on nodejs/node#12344
+# (categories touched by the PR are pre-selected)
 $ git node benchmark 12344
 # is equivalent to
 $ git node benchmark https://github.com/nodejs/node/pull/12344
 
-# Run specific categories non-interactively, repeating each benchmark 10 times
-$ git node benchmark 12344 --category buffers --category url --runs 10
+# Restrict to a benchmark filter and repeat each benchmark 10 times
+$ git node benchmark 12344 --filter net-c2c --runs 10
 
 # Dispatch the workflow hosted on a fork for a nodejs/node PR
 $ git node benchmark 12344 --workflow-owner my-user --workflow-repo node

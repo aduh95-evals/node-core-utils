@@ -44,6 +44,7 @@ const contents = [
 function makeRequest() {
   return {
     getPullRequest: sinon.stub().resolves(pr),
+    getPullRequestFiles: sinon.stub().resolves([]),
     listDirectory: sinon.stub().resolves(contents),
     dispatchWorkflow: sinon.stub().resolves({ ok: true })
   };
@@ -93,10 +94,27 @@ describe('BenchmarkSession', () => {
     });
   });
 
+  it('pre-checks categories touched by the PR', async() => {
+    request.getPullRequestFiles.resolves([
+      { filename: 'benchmark/url/url-parse.js' },
+      { filename: 'lib/url.js' },
+      { filename: 'benchmark/fixtures/foo.js' }
+    ]);
+    cli.promptCheckbox.resolves(['url']);
+    const session = new BenchmarkSession(cli, request, { ...baseArgv });
+    await session.start();
+
+    const [, choices] = cli.promptCheckbox.firstCall.args;
+    assert.deepStrictEqual(choices, [
+      { name: 'buffers', value: 'buffers', checked: false },
+      { name: 'url', value: 'url', checked: true }
+    ]);
+  });
+
   it('sets repo input when the workflow lives in another repository', async() => {
+    cli.promptCheckbox.resolves(['buffers']);
     const session = new BenchmarkSession(cli, request, {
       ...baseArgv,
-      category: ['buffers'],
       workflowOwner: 'aduh95-evals',
       workflowRepo: 'node',
       filter: 'net',
@@ -114,16 +132,6 @@ describe('BenchmarkSession', () => {
       filter: 'net',
       runs: '10'
     });
-    assert.ok(cli.promptCheckbox.notCalled);
-  });
-
-  it('throws on unknown categories passed via --category', async() => {
-    const session = new BenchmarkSession(cli, request, {
-      ...baseArgv,
-      category: ['nonexistent']
-    });
-    await assert.rejects(session.start(), /__ignore__/);
-    assert.ok(request.dispatchWorkflow.notCalled);
   });
 
   it('does not dispatch when the confirmation prompt is declined', async() => {

@@ -42,11 +42,6 @@ const options = {
     default: 'main',
     type: 'string'
   },
-  category: {
-    alias: 'c',
-    describe: 'Benchmark categories to run (skips the interactive prompt)',
-    type: 'array'
-  },
   filter: {
     describe: 'A substring to restrict the benchmarks to run in a category',
     type: 'string'
@@ -73,8 +68,6 @@ export function builder(yargs) {
     .example('git node benchmark https://github.com/nodejs/node/pull/12344',
       'Pick benchmark categories to run on ' +
       'https://github.com/nodejs/node/pull/12344')
-    .example('git node benchmark 12344 --category buffers --category url',
-      'Run the buffers and url benchmarks without the interactive prompt')
     .wrap(90);
 }
 
