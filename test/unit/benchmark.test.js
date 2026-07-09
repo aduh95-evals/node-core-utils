@@ -41,10 +41,16 @@ const contents = [
   { type: 'file', name: '_http-benchmarkers.js' }
 ];
 
+function filesGenerator(files) {
+  return async function * () {
+    yield * files;
+  };
+}
+
 function makeRequest() {
   return {
     getPullRequest: sinon.stub().resolves(pr),
-    getPullRequestFiles: sinon.stub().resolves([]),
+    getPullRequestFiles: sinon.stub().callsFake(filesGenerator([])),
     listDirectory: sinon.stub().resolves(contents),
     dispatchWorkflow: sinon.stub().resolves({ ok: true })
   };
@@ -95,11 +101,11 @@ describe('BenchmarkSession', () => {
   });
 
   it('pre-checks categories touched by the PR', async() => {
-    request.getPullRequestFiles.resolves([
+    request.getPullRequestFiles.callsFake(filesGenerator([
       { filename: 'benchmark/url/url-parse.js' },
       { filename: 'lib/url.js' },
       { filename: 'benchmark/fixtures/foo.js' }
-    ]);
+    ]));
     cli.promptCheckbox.resolves(['url']);
     const session = new BenchmarkSession(cli, request, { ...baseArgv });
     await session.start();
