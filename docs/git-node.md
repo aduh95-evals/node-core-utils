@@ -542,8 +542,9 @@ run (the folders in [`benchmark/`][] at the PR head). Categories whose files are
 touched by the PR are checked by default; if the PR touches no benchmark file,
 the pre-selection is guessed from the PR's subsystem labels. You are then prompted for an optional
 filter substring; if the PR touches a single benchmark file and only that file's
-category is selected, the filter is pre-filled with that file's name. It then
-dispatches the workflow with the PR number and its head commit.
+category is selected, the filter is pre-filled with that file's name. Finally you
+are asked whether the workflow should post the results as a comment on the PR. It
+then dispatches the workflow with the PR number and its head commit.
 
 ```
 git-node benchmark <identifier>

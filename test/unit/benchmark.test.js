@@ -105,7 +105,8 @@ describe('BenchmarkSession', () => {
     assert.deepStrictEqual(opts.inputs, {
       pr_id: '123',
       commit: 'deadbeef',
-      category: 'buffers url'
+      category: 'buffers url',
+      'post-comment': 'true'
     });
   });
 
@@ -187,7 +188,8 @@ describe('BenchmarkSession', () => {
       commit: 'deadbeef',
       category: 'buffers',
       repo: 'nodejs/node',
-      runs: '10'
+      runs: '10',
+      'post-comment': 'true'
     });
   });
 
@@ -201,6 +203,20 @@ describe('BenchmarkSession', () => {
 
     const [, opts] = request.dispatchWorkflow.firstCall.args;
     assert.strictEqual(opts.inputs.commit, 'cafebabe');
+  });
+
+  it('sets post-comment to false when the user declines the prompt', async() => {
+    cli.promptCheckbox.resolves(['buffers']);
+    // Decline the "comment on the PR?" prompt but confirm the final dispatch.
+    cli.prompt.callsFake((message, opts = {}) => {
+      if (/comment/i.test(message)) return Promise.resolve(false);
+      return Promise.resolve(opts.questionType === QUESTION_TYPE.INPUT ? '' : true);
+    });
+    const session = new BenchmarkSession(cli, request, { ...baseArgv });
+    await session.start();
+
+    const [, opts] = request.dispatchWorkflow.firstCall.args;
+    assert.strictEqual(opts.inputs['post-comment'], 'false');
   });
 
   it('does not dispatch when the confirmation prompt is declined', async() => {
