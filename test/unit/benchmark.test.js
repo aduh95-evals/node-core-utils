@@ -126,6 +126,22 @@ describe('BenchmarkSession', () => {
     ]);
   });
 
+  it('falls back to PR labels when no benchmark file is touched', async() => {
+    request.getPullRequest.resolves({
+      ...pr,
+      labels: [{ name: 'buffer' }, { name: 'dont-land-on-v20.x' }]
+    });
+    cli.promptCheckbox.resolves(['buffers']);
+    const session = new BenchmarkSession(cli, request, { ...baseArgv });
+    await session.start();
+
+    const [, choices] = cli.promptCheckbox.firstCall.args;
+    assert.deepStrictEqual(choices, [
+      { name: 'buffers', value: 'buffers', checked: true },
+      { name: 'url', value: 'url', checked: false }
+    ]);
+  });
+
   it('pre-fills the filter when a single benchmark file is touched', async() => {
     request.getPullRequestFiles.callsFake(filesGenerator([
       { filename: 'benchmark/url/url-parse.js' }
