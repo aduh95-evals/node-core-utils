@@ -8,9 +8,13 @@ import BenchmarkSession from '../../lib/benchmark.js';
 const QUESTION_TYPE = { INPUT: 'input', CONFIRM: 'confirm' };
 
 // prompt() is used both for yes/no confirmations and for the free-text filter
-// input; default to "yes" for confirmations and an empty string for inputs.
+// input; honour the prompt's defaultAnswer for confirmations and return an
+// empty string for inputs.
 function defaultPrompt(message, opts = {}) {
-  return Promise.resolve(opts.questionType === QUESTION_TYPE.INPUT ? '' : true);
+  if (opts.questionType === QUESTION_TYPE.INPUT) {
+    return Promise.resolve('');
+  }
+  return Promise.resolve(opts.defaultAnswer ?? true);
 }
 
 function makeCli() {
@@ -189,7 +193,8 @@ describe('BenchmarkSession', () => {
       category: 'buffers',
       repo: 'nodejs/node',
       runs: '10',
-      'post-comment': 'true'
+      // The workflow lives in a different repo, so commenting defaults to off.
+      'post-comment': 'false'
     });
   });
 
