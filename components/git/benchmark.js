@@ -42,10 +42,6 @@ const options = {
     default: 'main',
     type: 'string'
   },
-  filter: {
-    describe: 'A substring to restrict the benchmarks to run in a category',
-    type: 'string'
-  },
   runs: {
     describe: 'How many times to repeat each benchmark',
     type: 'number'

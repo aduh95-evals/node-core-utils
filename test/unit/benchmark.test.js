@@ -5,9 +5,18 @@ import * as sinon from 'sinon';
 
 import BenchmarkSession from '../../lib/benchmark.js';
 
+const QUESTION_TYPE = { INPUT: 'input', CONFIRM: 'confirm' };
+
+// prompt() is used both for yes/no confirmations and for the free-text filter
+// input; default to "yes" for confirmations and an empty string for inputs.
+function defaultPrompt(message, opts = {}) {
+  return Promise.resolve(opts.questionType === QUESTION_TYPE.INPUT ? '' : true);
+}
+
 function makeCli() {
   return {
     SPINNER_STATUS: { SUCCESS: 'success', FAILED: 'failed' },
+    QUESTION_TYPE,
     startSpinner: sinon.stub(),
     stopSpinner: sinon.stub(),
     updateSpinner: sinon.stub(),
@@ -17,7 +26,7 @@ function makeCli() {
     warn: sinon.stub(),
     error: sinon.stub(),
     log: sinon.stub(),
-    prompt: sinon.stub().resolves(true),
+    prompt: sinon.stub().callsFake(defaultPrompt),
     promptCheckbox: sinon.stub()
   };
 }
@@ -117,13 +126,37 @@ describe('BenchmarkSession', () => {
     ]);
   });
 
+  it('offers a filter when a single benchmark file is touched', async() => {
+    request.getPullRequestFiles.callsFake(filesGenerator([
+      { filename: 'benchmark/url/url-parse.js' }
+    ]));
+    cli.promptCheckbox.resolves(['url']);
+    const session = new BenchmarkSession(cli, request, { ...baseArgv });
+    await session.start();
+
+    const [, opts] = request.dispatchWorkflow.firstCall.args;
+    assert.strictEqual(opts.inputs.filter, 'url-parse');
+    const [message] = cli.prompt.firstCall.args;
+    assert.match(message, /url-parse/);
+  });
+
+  it('uses the interactive filter prompt otherwise', async() => {
+    cli.promptCheckbox.resolves(['buffers']);
+    cli.prompt.callsFake((message, opts = {}) =>
+      Promise.resolve(opts.questionType === QUESTION_TYPE.INPUT ? 'foo ' : true));
+    const session = new BenchmarkSession(cli, request, { ...baseArgv });
+    await session.start();
+
+    const [, opts] = request.dispatchWorkflow.firstCall.args;
+    assert.strictEqual(opts.inputs.filter, 'foo');
+  });
+
   it('sets repo input when the workflow lives in another repository', async() => {
     cli.promptCheckbox.resolves(['buffers']);
     const session = new BenchmarkSession(cli, request, {
       ...baseArgv,
       workflowOwner: 'aduh95-evals',
       workflowRepo: 'node',
-      filter: 'net',
       runs: 10
     });
     await session.start();
@@ -135,14 +168,14 @@ describe('BenchmarkSession', () => {
       commit: 'deadbeef',
       category: 'buffers',
       repo: 'nodejs/node',
-      filter: 'net',
       runs: '10'
     });
   });
 
   it('does not dispatch when the confirmation prompt is declined', async() => {
     cli.promptCheckbox.resolves(['buffers']);
-    cli.prompt.resolves(false);
+    cli.prompt.callsFake((message, opts = {}) =>
+      Promise.resolve(opts.questionType === QUESTION_TYPE.INPUT ? '' : false));
     const session = new BenchmarkSession(cli, request, { ...baseArgv });
     await assert.rejects(session.start(), /__ignore__/);
     assert.ok(request.dispatchWorkflow.notCalled);

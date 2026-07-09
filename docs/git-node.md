@@ -539,8 +539,10 @@ Branch:    main
 Trigger the [`benchmark.yml`][] GitHub Actions workflow on a pull request. The
 command fetches the PR, then prompts you to pick which benchmark categories to
 run (the folders in [`benchmark/`][] at the PR head). Categories whose files are
-touched by the PR are checked by default. It then dispatches the workflow with
-the PR number and its head commit.
+touched by the PR are checked by default. You are then prompted for an optional
+filter substring; if the PR touches a single benchmark file and only that file's
+category is selected, the command offers to filter on that file. It then
+dispatches the workflow with the PR number and its head commit.
 
 ```
 git-node benchmark <identifier>
@@ -562,7 +564,6 @@ Options:
   --workflow        The workflow file to dispatch   [string] [default: "benchmark.yml"]
   --ref             The git ref of the workflow repository to run the workflow from
                                                                  [string] [default: "main"]
-  --filter          A substring to restrict the benchmarks to run in a category   [string]
   --runs            How many times to repeat each benchmark                       [number]
 ```
 
@@ -580,8 +581,8 @@ $ git node benchmark 12344
 # is equivalent to
 $ git node benchmark https://github.com/nodejs/node/pull/12344
 
-# Restrict to a benchmark filter and repeat each benchmark 10 times
-$ git node benchmark 12344 --filter net-c2c --runs 10
+# Repeat each benchmark 10 times (the filter is asked interactively)
+$ git node benchmark 12344 --runs 10
 
 # Dispatch the workflow hosted on a fork for a nodejs/node PR
 $ git node benchmark 12344 --workflow-owner my-user --workflow-repo node
