@@ -38,8 +38,7 @@ const options = {
     type: 'string'
   },
   ref: {
-    describe: 'The git ref of the workflow repository to run the workflow ' +
-      'from (also set by a commit URL passed as the identifier)',
+    describe: 'The git ref of the workflow repository to run the workflow from',
     default: 'main',
     type: 'string'
   },
@@ -57,8 +56,7 @@ export function builder(yargs) {
     .options(options)
     .positional('identifier', {
       type: 'string',
-      describe: 'ID or URL of the pull request. A commit URL ' +
-        '(…/pull/<id>/commits/<sha>) also sets --ref to that commit.'
+      describe: 'ID or URL of the pull request'
     })
     .example('git node benchmark 12344',
       'Pick benchmark categories to run on ' +
@@ -66,39 +64,20 @@ export function builder(yargs) {
     .example('git node benchmark https://github.com/nodejs/node/pull/12344',
       'Pick benchmark categories to run on ' +
       'https://github.com/nodejs/node/pull/12344')
-    .example(
-      'git node benchmark ' +
-      'https://github.com/nodejs/node/pull/12344/commits/abc1234',
-      'Run the workflow from commit abc1234 (equivalent to --ref abc1234)')
     .wrap(90);
 }
 
-const COMMIT_URL_RE = /\/pull\/\d+\/commits\/([0-9a-f]{7,40})/i;
-
-// Parse the positional identifier into { prid, owner?, repo?, ref? }.
-// A PR commit URL (…/pull/<id>/commits/<sha>) also yields the commit as `ref`.
-export function parseIdentifier(identifier) {
-  const prid = Number.parseInt(identifier);
-  if (!Number.isNaN(prid)) {
-    return { prid };
-  }
-  const parsed = parsePRFromURL(identifier);
-  if (!parsed) {
-    return undefined;
-  }
-  const commit = COMMIT_URL_RE.exec(identifier);
-  if (commit) {
-    parsed.ref = commit[1];
-  }
-  return parsed;
-}
-
 export function handler(argv) {
-  const parsed = parseIdentifier(argv.identifier);
-  if (!parsed) {
-    return yargsInstance.showHelp();
+  const prid = Number.parseInt(argv.identifier);
+  if (!Number.isNaN(prid)) {
+    argv.prid = prid;
+  } else {
+    const parsed = parsePRFromURL(argv.identifier);
+    if (!parsed) {
+      return yargsInstance.showHelp();
+    }
+    Object.assign(argv, parsed);
   }
-  Object.assign(argv, parsed);
 
   return runPromise(main(argv));
 }
