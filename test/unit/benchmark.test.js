@@ -191,6 +191,18 @@ describe('BenchmarkSession', () => {
     });
   });
 
+  it('benchmarks the provided commit instead of the PR head', async() => {
+    cli.promptCheckbox.resolves(['buffers']);
+    const session = new BenchmarkSession(cli, request, {
+      ...baseArgv,
+      commit: 'cafebabe'
+    });
+    await session.start();
+
+    const [, opts] = request.dispatchWorkflow.firstCall.args;
+    assert.strictEqual(opts.inputs.commit, 'cafebabe');
+  });
+
   it('does not dispatch when the confirmation prompt is declined', async() => {
     cli.promptCheckbox.resolves(['buffers']);
     cli.prompt.callsFake((message, opts = {}) =>

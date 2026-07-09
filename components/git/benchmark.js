@@ -56,7 +56,9 @@ export function builder(yargs) {
     .options(options)
     .positional('identifier', {
       type: 'string',
-      describe: 'ID or URL of the pull request'
+      describe: 'ID or URL of the pull request. A commit URL ' +
+        '(…/pull/<id>/commits/<sha>) benchmarks that commit instead of the ' +
+        'PR head.'
     })
     .example('git node benchmark 12344',
       'Pick benchmark categories to run on ' +
@@ -64,20 +66,39 @@ export function builder(yargs) {
     .example('git node benchmark https://github.com/nodejs/node/pull/12344',
       'Pick benchmark categories to run on ' +
       'https://github.com/nodejs/node/pull/12344')
+    .example(
+      'git node benchmark ' +
+      'https://github.com/nodejs/node/pull/12344/commits/abc1234',
+      'Benchmark commit abc1234 rather than the current PR head')
     .wrap(90);
 }
 
-export function handler(argv) {
-  const prid = Number.parseInt(argv.identifier);
+const COMMIT_URL_RE = /\/pull\/\d+\/commits\/([0-9a-f]{7,40})/i;
+
+// Parse the positional identifier into { prid, owner?, repo?, commit? }.
+// A PR commit URL (…/pull/<id>/commits/<sha>) also yields the commit SHA.
+export function parseIdentifier(identifier) {
+  const prid = Number.parseInt(identifier);
   if (!Number.isNaN(prid)) {
-    argv.prid = prid;
-  } else {
-    const parsed = parsePRFromURL(argv.identifier);
-    if (!parsed) {
-      return yargsInstance.showHelp();
-    }
-    Object.assign(argv, parsed);
+    return { prid };
   }
+  const parsed = parsePRFromURL(identifier);
+  if (!parsed) {
+    return undefined;
+  }
+  const commit = COMMIT_URL_RE.exec(identifier);
+  if (commit) {
+    parsed.commit = commit[1];
+  }
+  return parsed;
+}
+
+export function handler(argv) {
+  const parsed = parseIdentifier(argv.identifier);
+  if (!parsed) {
+    return yargsInstance.showHelp();
+  }
+  Object.assign(argv, parsed);
 
   return runPromise(main(argv));
 }
