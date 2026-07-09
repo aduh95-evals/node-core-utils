@@ -551,7 +551,8 @@ git-node benchmark <identifier>
 Trigger the benchmark GitHub Actions workflow for a pull request
 
 Positionals:
-  identifier  ID or URL of the pull request                            [string] [required]
+  identifier  ID or URL of the pull request; a commit URL
+              (…/pull/<id>/commits/<sha>) also sets --ref     [string] [required]
 
 Options:
   --version         Show version number                                          [boolean]
@@ -587,6 +588,9 @@ $ git node benchmark 12344 --runs 10
 
 # Dispatch the workflow hosted on a fork for a nodejs/node PR
 $ git node benchmark 12344 --workflow-owner my-user --workflow-repo node
+
+# Run the workflow from a specific PR commit (sets --ref to abc1234)
+$ git node benchmark https://github.com/nodejs/node/pull/12344/commits/abc1234
 ```
 
 ## `git node wpt`
