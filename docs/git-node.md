@@ -541,7 +541,7 @@ command fetches the PR, then prompts you to pick which benchmark categories to
 run (the folders in [`benchmark/`][] at the PR head). Categories whose files are
 touched by the PR are checked by default. You are then prompted for an optional
 filter substring; if the PR touches a single benchmark file and only that file's
-category is selected, the command offers to filter on that file. It then
+category is selected, the filter is pre-filled with that file's name. It then
 dispatches the workflow with the PR number and its head commit.
 
 ```

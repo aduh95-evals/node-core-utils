@@ -126,18 +126,21 @@ describe('BenchmarkSession', () => {
     ]);
   });
 
-  it('offers a filter when a single benchmark file is touched', async() => {
+  it('pre-fills the filter when a single benchmark file is touched', async() => {
     request.getPullRequestFiles.callsFake(filesGenerator([
       { filename: 'benchmark/url/url-parse.js' }
     ]));
     cli.promptCheckbox.resolves(['url']);
+    // Accept the pre-filled default answer for the filter prompt.
+    cli.prompt.callsFake((message, opts = {}) =>
+      Promise.resolve(opts.questionType === QUESTION_TYPE.INPUT
+        ? opts.defaultAnswer
+        : true));
     const session = new BenchmarkSession(cli, request, { ...baseArgv });
     await session.start();
 
     const [, opts] = request.dispatchWorkflow.firstCall.args;
     assert.strictEqual(opts.inputs.filter, 'url-parse');
-    const [message] = cli.prompt.firstCall.args;
-    assert.match(message, /url-parse/);
   });
 
   it('uses the interactive filter prompt otherwise', async() => {
