@@ -1,5 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import SecurityBlog from '../../lib/security_blog.js';
 import PrepareSecurityRelease, {
@@ -782,6 +785,64 @@ describe('security_release: push vulnerabilities.json', () => {
       }],
       ['createOrUpdateFile', { ...file, sha: 'file-sha' }]
     ]);
+  });
+});
+
+describe('security_release: edit vulnerabilities.json', () => {
+  // Fake editor: replaces the file with the contents of the next answer.
+  function useEditor(t, answers) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ncu-test-editor-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const answersPath = path.join(dir, 'answers.json');
+    fs.writeFileSync(answersPath, JSON.stringify(answers));
+    const script = path.join(dir, 'editor.mjs');
+    fs.writeFileSync(script, `
+      import fs from 'node:fs';
+      const answers = JSON.parse(fs.readFileSync(${JSON.stringify(answersPath)}, 'utf8'));
+      fs.writeFileSync(process.argv[2], answers.shift());
+      fs.writeFileSync(${JSON.stringify(answersPath)}, JSON.stringify(answers));
+    `);
+    const previous = process.env.GIT_EDITOR;
+    process.env.GIT_EDITOR = `"${process.execPath}" "${script}"`;
+    t.after(() => {
+      if (previous === undefined) delete process.env.GIT_EDITOR;
+      else process.env.GIT_EDITOR = previous;
+    });
+  }
+
+  it('returns the edited content', async(t) => {
+    useEditor(t, ['{"edited":true}\n']);
+    const release = new PrepareSecurityRelease({});
+    assert.strictEqual(
+      await release.editVulnerabilitiesJSON('{}\n'),
+      '{"edited":true}\n'
+    );
+  });
+
+  it('offers to edit again when the result is not valid JSON', async(t) => {
+    useEditor(t, ['{', '{"fixed":true}']);
+    const prompts = [];
+    const release = new PrepareSecurityRelease({
+      error() {},
+      prompt(message) {
+        prompts.push(message);
+        return true;
+      }
+    });
+    assert.strictEqual(await release.editVulnerabilitiesJSON('{}\n'), '{"fixed":true}');
+    assert.deepStrictEqual(prompts, ['Edit vulnerabilities.json again?']);
+  });
+
+  it('aborts when the user does not fix invalid JSON', async(t) => {
+    useEditor(t, ['{']);
+    const release = new PrepareSecurityRelease({
+      error() {},
+      prompt() {
+        return false;
+      }
+    });
+    await assert.rejects(() => release.editVulnerabilitiesJSON('{}\n'),
+      /vulnerabilities\.json is not valid JSON/);
   });
 });
 
