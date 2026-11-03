@@ -757,14 +757,10 @@ describe('security_release: push vulnerabilities.json', () => {
     assert.strictEqual(calls[0][1], 'main');
   });
 
-  it('refuses to start when the branch already exists', async(t) => {
+  it('refuses to start when the branch already exists', async() => {
     const { release } = setup({ branchSHA: 'branch-sha' });
-    release.cli.info = () => {};
-    const exit = t.mock.method(process, 'exit', () => {
-      throw new Error('exit');
-    });
-    await assert.rejects(() => release.checkBranchDoesNotExist(), /exit/);
-    assert.deepStrictEqual(exit.mock.calls[0].arguments, [1]);
+    await assert.rejects(() => release.checkBranchDoesNotExist(),
+      /A security release seems to be in progress/);
   });
 
   it('starts when the branch does not exist', async() => {
