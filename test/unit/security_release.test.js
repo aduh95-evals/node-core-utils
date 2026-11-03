@@ -19,6 +19,55 @@ import {
   getHighestSeverityAnnouncement
 } from '../../lib/security-release/security-release.js';
 
+describe('security_release: cleanup pull requests', () => {
+  const vulnerabilities = {
+    reports: [
+      {
+        affectedVersions: {
+          main: 'https://github.com/nodejs-private/node-private/pull/2',
+          '24.x': 'https://github.com/nodejs-private/node-private/pull/3',
+          '22.x': 'https://github.com/nodejs-private/node-private/pull/3'
+        }
+      }
+    ],
+    dependencies: {
+      undici: {
+        affectedVersions: {
+          main: 'https://github.com/nodejs/node/pull/5'
+        }
+      }
+    }
+  };
+
+  it('closes each PR from affectedVersions once', async() => {
+    const prompts = [];
+    const closed = [];
+    const release = new PrepareSecurityRelease({
+      startSpinner() {},
+      updateSpinner() {},
+      stopSpinner() {},
+      prompt(message) {
+        prompts.push(message);
+        return true;
+      }
+    });
+    release.req = {
+      closePullRequest(prid, repository) {
+        closed.push({ prid, ...repository });
+      }
+    };
+
+    await release.closePullRequests(vulnerabilities);
+
+    assert.deepStrictEqual(closed, [
+      { owner: 'nodejs-private', repo: 'node-private', prid: 2 },
+      { owner: 'nodejs-private', repo: 'node-private', prid: 3 },
+      { owner: 'nodejs', repo: 'node', prid: 5 }
+    ]);
+    assert.strictEqual(prompts.length, closed.length);
+  });
+});
+
 function report(id, rating, affectedVersions = ['24.x']) {
   return {
     id,
@@ -294,6 +343,30 @@ describe('security_release: CVE request versions', () => {
     assert.deepStrictEqual(radioPrompts, [
       'What is the patched version (>=) for release line 24.x?',
       'What is the patched version (>=) for release line 22.x?'
+    ]);
+  });
+
+  it('offers the next Alpha versions on an Alpha release line', async() => {
+    const radioChoices = [];
+    const release = new UpdateSecurityRelease({
+      prompt(message, options) {
+        assert.strictEqual(options.defaultAnswer, '');
+        return '27.0.0-alpha.1.2.3';
+      },
+      promptRadio(message, choices, options) {
+        radioChoices.push(choices, options.defaultAnswer);
+        return choices[0];
+      }
+    });
+
+    assert.deepStrictEqual(
+      (await release.calculateVersions(['27.x'], [{ major: 26, version: '26.12.0' }], []))
+        .patchedVersions,
+      ['27.0.0-alpha.1.2.4']
+    );
+    assert.deepStrictEqual(radioChoices, [
+      ['27.0.0-alpha.1.2.4', '27.0.0-alpha.1.3.0'],
+      '27.0.0-alpha.1.2.4'
     ]);
   });
 
@@ -766,10 +839,23 @@ describe('security_release: push vulnerabilities.json', () => {
       /A security release seems to be in progress/);
   });
 
+  it('refuses to start when a draft already exists on main', async() => {
+    const { release } = setup({ fileSHA: 'file-sha' });
+    await assert.rejects(() => release.checkBranchDoesNotExist(), /draft already exists/);
+  });
+
   it('starts when the branch does not exist', async() => {
     const { release, calls } = setup({});
     await release.checkBranchDoesNotExist();
-    assert.deepStrictEqual(calls, [['getBranchSHA', 'next-security-release']]);
+    assert.deepStrictEqual(calls, [
+      ['getBranchSHA', 'next-security-release'],
+      ['getFileSHA', {
+        owner: 'nodejs-private',
+        repo: 'security-release',
+        path: 'security-release/next-security-release/vulnerabilities.json',
+        ref: 'main'
+      }]
+    ]);
   });
 
   it('updates the file on an existing branch', async() => {
@@ -810,17 +896,22 @@ describe('security_release: edit vulnerabilities.json', () => {
     });
   }
 
-  it('returns the edited content', async(t) => {
-    useEditor(t, ['{"edited":true}\n']);
+  const normalized = JSON.stringify({
+    releaseDate: '2026-10-06', reports: [], dependencies: {}
+  }, null, 2) + '\n';
+
+  it('returns the edited content, normalized', async(t) => {
+    useEditor(t, ['{"releaseDate":"2026/10/06","reports":[]}']);
     const release = new PrepareSecurityRelease({});
-    assert.strictEqual(
-      await release.editVulnerabilitiesJSON('{}\n'),
-      '{"edited":true}\n'
-    );
+    assert.strictEqual(await release.editVulnerabilitiesJSON('{}\n'), normalized);
   });
 
-  it('offers to edit again when the result is not valid JSON', async(t) => {
-    useEditor(t, ['{', '{"fixed":true}']);
+  it('offers to edit again when the result is not valid', async(t) => {
+    useEditor(t, [
+      '{',
+      '{"releaseDate":"2026/10/06"}',
+      '{"releaseDate":"2026/10/06","reports":[]}'
+    ]);
     const prompts = [];
     const release = new PrepareSecurityRelease({
       error() {},
@@ -829,8 +920,11 @@ describe('security_release: edit vulnerabilities.json', () => {
         return true;
       }
     });
-    assert.strictEqual(await release.editVulnerabilitiesJSON('{}\n'), '{"fixed":true}');
-    assert.deepStrictEqual(prompts, ['Edit vulnerabilities.json again?']);
+    assert.strictEqual(await release.editVulnerabilitiesJSON('{}\n'), normalized);
+    assert.deepStrictEqual(prompts, [
+      'Edit vulnerabilities.json again?',
+      'Edit vulnerabilities.json again?'
+    ]);
   });
 
   it('aborts when the user does not fix invalid JSON', async(t) => {
@@ -842,7 +936,7 @@ describe('security_release: edit vulnerabilities.json', () => {
       }
     });
     await assert.rejects(() => release.editVulnerabilitiesJSON('{}\n'),
-      /vulnerabilities\.json is not valid JSON/);
+      /vulnerabilities\.json is not valid/);
   });
 });
 

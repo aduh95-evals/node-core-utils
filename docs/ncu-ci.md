@@ -13,10 +13,13 @@ Supported jobs:
 ncu-ci <command>
 
 Commands:
+  ncu-ci available          Check whether Jenkins is available for PR CI requests
+  ncu-ci workload           Print the number of running and queued node-test-pull-request jobs
   ncu-ci rate <type>        Calculate the green rate of a CI job in the last 100
                             runs
   ncu-ci walk <type>        Walk the CI and display the failures
   ncu-ci run <prid>         Start a node-test-pull-request CI job for a PR
+  ncu-ci resume <prid>      Resume the latest node-test-pull-request CI job for a PR
   ncu-ci url <url>          Automatically detect CI type and show results
   ncu-ci pr <jobid>         Show results of a node-test-pull-request CI job
   ncu-ci commit <jobid>     Show results of a node-test-commit CI job
@@ -34,9 +37,51 @@ Options:
   --help             Show help                                         [boolean]
 ```
 
+### `ncu-ci available`
+
+`ncu-ci available` checks whether Jenkins is available for PR CI requests. It
+exits with status 0 and no output when the controller is not preparing for
+shutdown and `node-test-pull-request` is enabled and buildable. Otherwise it exits
+with status 1 and explains the reason on stderr. HTTP failures, timeouts, and
+unrecognized responses are treated as unavailable.
+
+The command only reads Jenkins state. It does not start or resume a build, check
+individual PRs, or require idle executors. Availability can change after the
+check.
+
+### `ncu-ci workload`
+
+`ncu-ci workload` prints the number of running and queued `node-test-pull-request`
+jobs, followed by a newline. This includes PR builds waiting for downstream tests.
+Each PR build counts once; downstream test jobs do not add to the count. If no PR
+builds are running or queued, it prints `0`. A failed query exits with status 1,
+reports the reason on stderr, and does not print a count.
+
+The command reads Jenkins executors and the waiting queue, so older active builds
+are counted without relying on a limited build history. A request that starts
+between the two reads is counted once. The count is a snapshot and can change
+before a new request starts.
+
+Both commands use the configured `username` and `jenkins_token`; no GitHub token,
+repository configuration, or PR argument is required. Each command has a
+20-second deadline for its Jenkins requests, including response bodies.
+
+For example, skip processing requests unless Jenkins is available and fewer than
+five PR jobs are running or queued:
+
+```sh
+ncu-ci available || exit 0
+workload=$(ncu-ci workload) || exit 0
+[ "$workload" -lt 5 ] || exit 0
+
+# Process requests here.
+```
+
 ### `ncu-ci rate <type>`
 
 `ncu-ci rate <type>` calculate the success rate for CI jobs in the last 100 runs per [CI Health History](https://github.com/nodejs/reliability#ci-health-history), where `<type>` can be either `pr` for `node-test-pull-request` or `commit` for `node-test-commit`. See `ncu-ci rate --help` for more.
+
+Builds targeting the `nodejs-private` organization are excluded from the counts.
 
 Examples:
 
@@ -65,6 +110,9 @@ node on git:main ❯ ncu-ci rate commit
 ### `ncu-ci walk <type>`
 
 `ncu-ci walk <type>` walks CI and displays failures, where `<type>` can be either `pr` for `node-test-pull-request` or `commit` for `node-test-commit`. See `ncu-ci walk --help` for more.
+
+Builds targeting the `nodejs-private` organization are excluded from the health
+summary and failure report.
 
 Example:
 ```sh
@@ -149,6 +197,11 @@ Options:
 - `--owner <owner>`: GitHub repository owner, used when `<prid>` is not a GitHub URL
 - `--repo <repo>`: GitHub repository name, used when `<prid>` is not a GitHub URL
 
+With `--check-for-duplicates`, an existing CI run for the same approved commit
+prevents starting another run, including when a failed or aborted build has no
+eligible resume action. Errors checking resume availability also prevent starting
+another run.
+
 Examples:
 
 Run CI for a PR number using repository information from config or flags:
@@ -171,6 +224,54 @@ ncu-ci run https://github.com/nodejs/node/pull/34127/commits/35ea6ded7315cf9d058
 
 If the PR has the `v8 engine` label, `ncu-ci run` also triggers the `node-test-commit-v8-linux`
 job after the main PR CI job is started successfully.
+
+### `ncu-ci resume <prid>`
+
+`ncu-ci resume <prid>` resumes the latest `node-test-pull-request` CI run linked
+in the PR description, comments, or reviews. The job must have finished with
+`FAILURE` or `ABORTED`. Running jobs and jobs with other results are not resumed.
+If no PR CI run is found, or Jenkins rejects the resume request, the command
+reports the failure and exits unsuccessfully.
+
+Before downloading failure logs or submitting a resume request, the command checks
+that Jenkins offers the **Resume build** action to your account. A failed or
+aborted result alone does not guarantee that this action is available. If it is
+missing, the command follows Jenkins' recorded resume ancestry to the nearest
+ancestor that offers the action, and reports which run it will resume. Each
+ancestor must have finished with `FAILURE` or `ABORTED` and match the PR,
+repository, and approved commit. It does not search unrelated older CI runs or
+skip past a mismatched ancestor. If no eligible ancestor is available, the command
+reports the build URL and exits unsuccessfully. Errors checking
+availability stop the command without attempting to resume.
+
+The CI-approved commit (`COMMIT_SHA_CHECK`) must match the PR's current HEAD.
+The command refuses to resume if they differ or the approved commit cannot be
+determined.
+
+Before resuming, the command streams failed-job console output and compares
+failure diagnostics with the PR's changed files. When recovering through resume
+ancestry, it checks the latest run and every ancestor visited. It refuses to resume
+if a failed test or a file referenced in a failure diagnostic is changed by the PR.
+Generic `make` recipe-failure summaries do not count as file references; direct
+Makefile diagnostics, such as syntax errors, still do.
+The refusal includes the first matching filename, failure excerpt, and console
+log URL. Large excerpts are truncated with an explicit marker.
+Logs are scanned one at a time with bounded memory. HTTP compression is decoded as the
+response arrives. A match cancels the download and skips remaining logs. Unknown
+or unavailable failure details do not prevent resuming; the check uses the
+available diagnostics. Failure to retrieve the PR's changed-file list prevents
+resuming.
+
+Pass a PR number with repository information from config or flags, or a PR URL:
+
+```sh
+ncu-ci resume 34127 --owner nodejs --repo node
+ncu-ci resume https://github.com/nodejs/node/pull/34127
+```
+
+This uses Jenkins' **Resume build** action on the existing job. It does not start
+a fresh CI run for the current PR head. Jenkins credentials with permission to
+resume the job are required.
 
 ### `ncu-ci pr <jobid>` 
 

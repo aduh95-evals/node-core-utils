@@ -1,5 +1,212 @@
 # Changelog
 
+## [7.6.0](https://github.com/nodejs/node-core-utils/compare/v7.5.3...v7.6.0) (2026-11-03)
+
+
+### Features
+
+* **release:** support alpha releases ([#1224](https://github.com/nodejs/node-core-utils/issues/1224)) ([8f02c22](https://github.com/nodejs/node-core-utils/commit/8f02c22c7f3d587986487ba38b00fe1b87ebb147))
+* **v8:** add list-patches subcommand to help with v8 major update ([#1235](https://github.com/nodejs/node-core-utils/issues/1235)) ([8a4da1a](https://github.com/nodejs/node-core-utils/commit/8a4da1a34456786a3560b5825563692bb5879a60))
+
+## [7.5.3](https://github.com/nodejs/node-core-utils/compare/v7.5.2...v7.5.3) (2026-10-27)
+
+
+### Bug Fixes
+
+* ignore check suites superseded by a later run ([#1192](https://github.com/nodejs/node-core-utils/issues/1192)) ([ade9a85](https://github.com/nodejs/node-core-utils/commit/ade9a8597c90f7fef9241e2a7199acf6afad48f6))
+* **ncu-ci:** exclude nodejs-private from reports ([#1227](https://github.com/nodejs/node-core-utils/issues/1227)) ([31ac767](https://github.com/nodejs/node-core-utils/commit/31ac767aa84a1c2769b865aa2866053e066fe515))
+* **update-v8:** resolve temporal_capi deps in vendored sources ([#1230](https://github.com/nodejs/node-core-utils/issues/1230)) ([0120702](https://github.com/nodejs/node-core-utils/commit/0120702ac8d962980802e40458654fe74cf8ea93))
+
+## [7.5.2](https://github.com/nodejs/node-core-utils/compare/v7.5.1...v7.5.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* **git-node-vote:** specify GH API version ([#1222](https://github.com/nodejs/node-core-utils/issues/1222)) ([ff0f558](https://github.com/nodejs/node-core-utils/commit/ff0f558535822b3c99ea69bb800455b8a97a0887))
+* **v8:** set the V8 version during minor updates ([#1225](https://github.com/nodejs/node-core-utils/issues/1225)) ([9bf563f](https://github.com/nodejs/node-core-utils/commit/9bf563f04d8df15b50f449390d2fb8f880d6d51f))
+
+## [7.5.1](https://github.com/nodejs/node-core-utils/compare/v7.5.0...v7.5.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **ncu-ci:** retain `main` in mixed PR target lists ([#1219](https://github.com/nodejs/node-core-utils/issues/1219)) ([bdc212b](https://github.com/nodejs/node-core-utils/commit/bdc212b5f9de47479e74d5b321b88281215d0280))
+
+## [7.5.0](https://github.com/nodejs/node-core-utils/compare/v7.4.1...v7.5.0) (2026-10-15)
+
+
+### Features
+
+* hide default-branch target and shorten URLs ([f4bd00a](https://github.com/nodejs/node-core-utils/commit/f4bd00a8e622e9b39bf28a72796b5ca83a20be15))
+* show PR target branches in CI reports ([a7e84b3](https://github.com/nodejs/node-core-utils/commit/a7e84b3ede9884d58fe4a0bc8bed5a0787f70124))
+
+
+### Bug Fixes
+
+* correct text of warning message ([8cc3608](https://github.com/nodejs/node-core-utils/commit/8cc36089792c2deb9f90c88b7cf267425c4b1963))
+
+## [7.4.1](https://github.com/nodejs/node-core-utils/compare/v7.4.0...v7.4.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **v8:** concatenate adjacent strings in V8 DEPS files ([#1212](https://github.com/nodejs/node-core-utils/issues/1212)) ([69bd53c](https://github.com/nodejs/node-core-utils/commit/69bd53cc7eb5d95859a78bd006973b85d7ea683f))
+
+## [7.4.0](https://github.com/nodejs/node-core-utils/compare/v7.3.1...v7.4.0) (2026-09-25)
+
+
+### Features
+
+* add ncu-ci available ([fd6b826](https://github.com/nodejs/node-core-utils/commit/fd6b82641c439bedae5233fc375b394c63d86561))
+* add ncu-ci workload ([e2fc177](https://github.com/nodejs/node-core-utils/commit/e2fc1773f3b200ffb090f27b11fc361fd5dea7b8))
+* recover CI resumes through eligible ancestors ([8addd1e](https://github.com/nodejs/node-core-utils/commit/8addd1e7da05ed13800a4ec07c3ae091d3a07b67))
+* show failures that prevent CI resumes ([db7a98b](https://github.com/nodejs/node-core-utils/commit/db7a98bd8f2ad4d408552e310fac455178f900f0))
+
+
+### Bug Fixes
+
+* guide CI recovery without bypassing duplicates ([955b7ab](https://github.com/nodejs/node-core-utils/commit/955b7ab424dd03a70fdb2e0b5b8641fa8cd070b7))
+* ignore make exit summaries in resume checks ([22ff79b](https://github.com/nodejs/node-core-utils/commit/22ff79b6fb8ff062f36d9376bec8f911fb59c545))
+
+## [7.3.1](https://github.com/nodejs/node-core-utils/compare/v7.3.0...v7.3.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* handle unexported Jenkins resume actions ([#1201](https://github.com/nodejs/node-core-utils/issues/1201)) ([42c89be](https://github.com/nodejs/node-core-utils/commit/42c89be54c29f09a1b1dfce5653a651706946f7a))
+
+## [7.3.0](https://github.com/nodejs/node-core-utils/compare/v7.2.3...v7.3.0) (2026-09-24)
+
+
+### Features
+
+* add ncu-ci resume command ([#1187](https://github.com/nodejs/node-core-utils/issues/1187)) ([39774a1](https://github.com/nodejs/node-core-utils/commit/39774a179d6ba55f1e4f74aa502fecd9f72b3290))
+
+
+### Bug Fixes
+
+* **security:** fetch all pages of triaged reports ([3fc3948](https://github.com/nodejs/node-core-utils/commit/3fc3948b9b13d2d0899454730beb1707aef7d841))
+* **security:** preserve existing release branches and staged work ([8e08470](https://github.com/nodejs/node-core-utils/commit/8e0847029cb3a2735e87fe7cd17b8768f9df45fe))
+* **security:** refuse to overwrite an existing release draft ([27fd6ee](https://github.com/nodejs/node-core-utils/commit/27fd6eec11c1c5a2397149e106215b02c493e2e1))
+
+## [7.2.3](https://github.com/nodejs/node-core-utils/compare/v7.2.2...v7.2.3) (2026-09-17)
+
+
+### Bug Fixes
+
+* start CI when the duplicate check cannot query Jenkins ([#1195](https://github.com/nodejs/node-core-utils/issues/1195)) ([a3dc22c](https://github.com/nodejs/node-core-utils/commit/a3dc22cc0451016033c66b08d95d2867db6b67e0))
+
+## [7.2.2](https://github.com/nodejs/node-core-utils/compare/v7.2.1...v7.2.2) (2026-09-15)
+
+
+### Bug Fixes
+
+* exclude stale matrix runs from CI reports ([#1191](https://github.com/nodejs/node-core-utils/issues/1191)) ([98b8e3b](https://github.com/nodejs/node-core-utils/commit/98b8e3be26228ca845396bfc33eb21ed67196664))
+* handle unavailable Jenkins commit build data ([#1193](https://github.com/nodejs/node-core-utils/issues/1193)) ([517f5b8](https://github.com/nodejs/node-core-utils/commit/517f5b874511042e7bcaef95f04bc37923190ce2))
+* ignore fully skipped startup failures ([#1170](https://github.com/nodejs/node-core-utils/issues/1170)) ([9f665fa](https://github.com/nodejs/node-core-utils/commit/9f665faa719320adf57f5aae6934cc3e678a601a))
+
+## [7.2.1](https://github.com/nodejs/node-core-utils/compare/v7.2.0...v7.2.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **ncu-ci:** `--check-for-duplicates` not properly awaiting a promise ([#1188](https://github.com/nodejs/node-core-utils/issues/1188)) ([949fb8e](https://github.com/nodejs/node-core-utils/commit/949fb8e71408e684a0c190ce9e3f7354dc3905d3))
+
+## [7.2.0](https://github.com/nodejs/node-core-utils/compare/v7.1.0...v7.2.0) (2026-08-25)
+
+
+### Features
+
+* expose pull request labels in metadata JSON ([297d58f](https://github.com/nodejs/node-core-utils/commit/297d58f3984ad392213b58242c2f628be1935564))
+
+
+### Bug Fixes
+
+* adjust --cleanup to close PRs ([c53f184](https://github.com/nodejs/node-core-utils/commit/c53f1845876b82c105a18e57c67898ffb3d21c2c))
+
+## [7.1.0](https://github.com/nodejs/node-core-utils/compare/v7.0.3...v7.1.0) (2026-08-10)
+
+
+### Features
+
+* report GraphQL error details ([d498aa2](https://github.com/nodejs/node-core-utils/commit/d498aa28645583e7b3407d651f4770a69defecaf))
+
+
+### Bug Fixes
+
+* filter check suites to GitHub Actions ([812f207](https://github.com/nodejs/node-core-utils/commit/812f20732b2623bc41aec749ab5a75a4c066f17d))
+
+## [7.0.3](https://github.com/nodejs/node-core-utils/compare/v7.0.2...v7.0.3) (2026-08-10)
+
+
+### Bug Fixes
+
+* **git-node:** update regex to support GitHub App installation tokens ([#1156](https://github.com/nodejs/node-core-utils/issues/1156)) ([1baf447](https://github.com/nodejs/node-core-utils/commit/1baf447d5283e4b7e63cb639678fb5f4894ecd91))
+
+## [7.0.2](https://github.com/nodejs/node-core-utils/compare/v7.0.1...v7.0.2) (2026-08-09)
+
+
+### Performance Improvements
+
+* query CI metadata only for pull request head ([b470600](https://github.com/nodejs/node-core-utils/commit/b470600289e5ecc94c900c06858672a152825805))
+
+## [7.0.1](https://github.com/nodejs/node-core-utils/compare/v7.0.0...v7.0.1) (2026-08-08)
+
+
+### Bug Fixes
+
+* **build:** retrieve dependency packages for npm bundle ([#1148](https://github.com/nodejs/node-core-utils/issues/1148)) ([4dcb93c](https://github.com/nodejs/node-core-utils/commit/4dcb93c19d5774281fb255376a10b688a20a5dcc))
+* remove fast-tracking from code-and-learn ([#1149](https://github.com/nodejs/node-core-utils/issues/1149)) ([8929f69](https://github.com/nodejs/node-core-utils/commit/8929f69b79177ae13b2c3b0cceeb4a169dc90a17))
+
+## [7.0.0](https://github.com/nodejs/node-core-utils/compare/v6.4.0...v7.0.0) (2026-08-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove npm shrinkwrap, bundle package dependencies ([#1135](https://github.com/nodejs/node-core-utils/issues/1135))
+* **ncu-ci:** remove `--copy` flag ([#1140](https://github.com/nodejs/node-core-utils/issues/1140))
+* remove deprecated get-metadata entrypoint
+* **v8:** synchronize Rust crates with major updates ([#1117](https://github.com/nodejs/node-core-utils/issues/1117))
+* drop support for Node.js 20 and 25 ([#1072](https://github.com/nodejs/node-core-utils/issues/1072))
+
+### Features
+
+* add confirmation steps to any write operation ([#1092](https://github.com/nodejs/node-core-utils/issues/1092)) ([07d5ba0](https://github.com/nodejs/node-core-utils/commit/07d5ba0c2c2800ebf7cd7f14c826c0a43ca65894))
+* add metadata JSON readiness output ([#1113](https://github.com/nodejs/node-core-utils/issues/1113)) ([a22e127](https://github.com/nodejs/node-core-utils/commit/a22e127565e86238cc9d0b378cbbe297cdc58ea6))
+* **git-node:** add `git node benchmark` ([#1114](https://github.com/nodejs/node-core-utils/issues/1114)) ([eb405a1](https://github.com/nodejs/node-core-utils/commit/eb405a170d741d5fdb2f7cbc4f7e413ad9570c40))
+* **git-node:** add `git node security --apply-patches` ([#1050](https://github.com/nodejs/node-core-utils/issues/1050)) ([bf990ac](https://github.com/nodejs/node-core-utils/commit/bf990ac8fdc9d92567a3b2e084c37051bfcff904))
+* **git-node:** select security release PRs from affectedVersions ([#1124](https://github.com/nodejs/node-core-utils/issues/1124)) ([72bf756](https://github.com/nodejs/node-core-utils/commit/72bf75617d38a551788a2540738574524072fc77))
+* improve DX of request-cves ([#1120](https://github.com/nodejs/node-core-utils/issues/1120)) ([f2f4ac5](https://github.com/nodejs/node-core-utils/commit/f2f4ac59adba509c18f64276e479ae0f81502138))
+* **security:** add include-all report selection mode ([#1111](https://github.com/nodejs/node-core-utils/issues/1111)) ([e4a7c7d](https://github.com/nodejs/node-core-utils/commit/e4a7c7dea4529235ecb8e028377e961d66bab0b7))
+* **security:** offer Tuesday release date choices ([#1110](https://github.com/nodejs/node-core-utils/issues/1110)) ([1f46846](https://github.com/nodejs/node-core-utils/commit/1f46846c29b6e21962beb7d15b9f94eb5781c5d3))
+* support affectedVersions as object ([#1118](https://github.com/nodejs/node-core-utils/issues/1118)) ([c3b9dc6](https://github.com/nodejs/node-core-utils/commit/c3b9dc659b0433b5d92e3a6bd72ec998a24289fa))
+* **v8:** synchronize Rust crates with major updates ([#1117](https://github.com/nodejs/node-core-utils/issues/1117)) ([78e1dbb](https://github.com/nodejs/node-core-utils/commit/78e1dbb7f0c5bddc3db820bd9d0feaa0a3490a9c))
+
+
+### Bug Fixes
+
+* add announcement ref to top-level vuln json ([#1119](https://github.com/nodejs/node-core-utils/issues/1119)) ([3017208](https://github.com/nodejs/node-core-utils/commit/3017208dc95e56f2381a9a4abf32336942f803c6))
+* adjust changelog on security releases ([9ccbe8e](https://github.com/nodejs/node-core-utils/commit/9ccbe8ee3299615c78c7dee461c401f560e53217))
+* borrow generateAmendedMessage in CherryPick ([#1125](https://github.com/nodejs/node-core-utils/issues/1125)) ([5b3296a](https://github.com/nodejs/node-core-utils/commit/5b3296a199e94b802c6c9b62bf190a7236378db2))
+* cherry-pick the landedCommitSha for security releases ([eabfbde](https://github.com/nodejs/node-core-utils/commit/eabfbde1963c6e436a1149ee002ec1d4ff647b95))
+* **git-node:** add missing exit loop condition ([#1101](https://github.com/nodejs/node-core-utils/issues/1101)) ([2d1085f](https://github.com/nodejs/node-core-utils/commit/2d1085f5824c76f9fe7261cefc6ccd74c9ce4035))
+* **git-node:** fix security release preparation ([e828716](https://github.com/nodejs/node-core-utils/commit/e828716e04faf33daf3217db8e4b160cbf9411a1))
+* **git-node:** fix SSH passphrase input when promoting a release ([#1097](https://github.com/nodejs/node-core-utils/issues/1097)) ([10c6f35](https://github.com/nodejs/node-core-utils/commit/10c6f35d8fde535f676d526c8ffe1eeb35951d9b))
+* **git-node:** prefill both patch and minor versions when requesting CVEs ([#1095](https://github.com/nodejs/node-core-utils/issues/1095)) ([0ead0a1](https://github.com/nodejs/node-core-utils/commit/0ead0a1a213fb67a43aec3ba2353613ec718dca3))
+* **git-node:** security release preparation should not use staging ([#1096](https://github.com/nodejs/node-core-utils/issues/1096)) ([4ad397f](https://github.com/nodejs/node-core-utils/commit/4ad397f9075cbcf7f741c4990629d1ff223ad5fb))
+* handle affectedVersions as object for post-release ([#1122](https://github.com/nodejs/node-core-utils/issues/1122)) ([c263c2a](https://github.com/nodejs/node-core-utils/commit/c263c2ae7d9be82feb79766a89a7bdaf5527b86b))
+* remove the separator for dep update ([#1112](https://github.com/nodejs/node-core-utils/issues/1112)) ([67fbf88](https://github.com/nodejs/node-core-utils/commit/67fbf883ad4234626d4ca1c5dd5226b7e663fc0a))
+* **v8:** set RUSTC_BOOTSTRAP=1 when using Cargo nightly features ([#1127](https://github.com/nodejs/node-core-utils/issues/1127)) ([828f427](https://github.com/nodejs/node-core-utils/commit/828f4277d1d83dafe6e1849ff10c955d59fa7c6d))
+* **wpt:** avoid test/fixtures/wpt/README.md conflicts ([d9fff73](https://github.com/nodejs/node-core-utils/commit/d9fff73877c8cffdfb03b1cd8132bd6c640fc137))
+
+
+### Miscellaneous Chores
+
+* drop support for Node.js 20 and 25 ([#1072](https://github.com/nodejs/node-core-utils/issues/1072)) ([c564d81](https://github.com/nodejs/node-core-utils/commit/c564d818fb55f7cdd3159708a65584db64fd43b6))
+* **ncu-ci:** remove `--copy` flag ([#1140](https://github.com/nodejs/node-core-utils/issues/1140)) ([490362f](https://github.com/nodejs/node-core-utils/commit/490362f8b1e1c29a4a43abbd3cc62df13ce73455))
+* remove deprecated get-metadata entrypoint ([438f78d](https://github.com/nodejs/node-core-utils/commit/438f78d1d8bc45e3ccafec4bb4571e1227cb8058))
+* remove npm shrinkwrap, bundle package dependencies ([#1135](https://github.com/nodejs/node-core-utils/issues/1135)) ([b7939d2](https://github.com/nodejs/node-core-utils/commit/b7939d2e681a1f0af9f255aec7615b0c60176451))
+
 ## [6.4.0](https://github.com/nodejs/node-core-utils/compare/v6.3.3...v6.4.0) (2026-05-13)
 
 

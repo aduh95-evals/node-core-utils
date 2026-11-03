@@ -562,52 +562,6 @@ describe('PRChecker', () => {
       cli.assertCalledWith(expectedLogs);
     });
 
-    it('should fast track code-and-learn PRs', () => {
-      const cli = new TestCLI();
-
-      const expectedLogs = {
-        ok:
-         [['Approvals: 4'],
-           ['- Foo User (@foo): https://github.com/nodejs/node/pull/16438#pullrequestreview-71480624'],
-           ['- Quux User (@Quux): LGTM'],
-           ['- Baz User (@Baz): https://github.com/nodejs/node/pull/16438#pullrequestreview-71488236'],
-           ['- Bar User (@bar) (TSC): lgtm']],
-        info:
-         [['This PR was created on Fri, 30 Nov 2018 17:50:44 GMT'],
-           ['This PR is being fast-tracked because ' +
-             'it is from a Code and Learn event']
-         ]
-      };
-
-      const pr = Object.assign({}, firstTimerPR, {
-        createdAt: LT_48H,
-        labels: {
-          nodes: [
-            { name: 'code-and-learn' }
-          ]
-        }
-      });
-
-      const data = {
-        pr,
-        reviewers: allGreenReviewers,
-        comments: commentsWithCI,
-        reviews: approvingReviews,
-        commits: [],
-        collaborators,
-        authorIsNew: () => true,
-        getThread() {
-          return PRData.prototype.getThread.call(this);
-        }
-      };
-      const checker = new PRChecker(cli, data, {}, argv);
-
-      cli.clearCalls();
-      const status = checker.checkReviewsAndWait(new Date(NOW));
-      assert(status);
-      cli.assertCalledWith(expectedLogs);
-    });
-
     it('should check the last fast-track request comment', () => {
       const cli = new TestCLI();
 
@@ -1432,6 +1386,38 @@ describe('PRChecker', () => {
       });
     });
 
+    for (const result of ['SUCCESS', 'FAILURE', null]) {
+      it(`should check CI with unavailable commit build data and result ${result}`, async() => {
+        const jenkins = structuredClone(jenkinsCI['success/node-test-pull-request-15237']);
+        jenkins.result = result;
+        jenkins.subBuilds[0].result = result;
+        jenkins.subBuilds[0].build = null;
+        const data = {
+          pr: firstTimerPR,
+          comments: commentsWithSuccessCI,
+          reviews: approvingReviews,
+          commits: githubCI['check-suite-success'],
+          getThread() {
+            return PRData.prototype.getThread.call(this);
+          }
+        };
+        const checker = new PRChecker(new TestCLI(), data, {
+          async json(url) {
+            assert(url.startsWith(jenkins.url));
+            return jenkins;
+          }
+        }, argv);
+
+        assert.strictEqual(Boolean(await checker.checkCI()), result === 'SUCCESS');
+        assert.deepStrictEqual(checker.reasons.map(({ code }) => code),
+          result === 'SUCCESS'
+            ? []
+            : [result === null
+                ? PR_CHECK_REASON_CODES.PENDING_JENKINS_CI
+                : PR_CHECK_REASON_CODES.FAILED_JENKINS_CI]);
+      });
+    }
+
     it('should error if failed Jenkins CI', async() => {
       const cli = new TestCLI();
 
@@ -1791,28 +1777,6 @@ describe('PRChecker', () => {
       cli.assertCalledWith(expectedLogs);
     });
 
-    it(
-      'should succeed if status succeeded with queued Dependabot check',
-      async() => {
-        const cli = new TestCLI();
-
-        const expectedLogs = {
-          ok: [
-            ['Last GitHub CI successful']
-          ]
-        };
-
-        const commits = githubCI['success-dependabot-queued'];
-        const data = Object.assign({}, baseData, { commits });
-
-        const checker = new PRChecker(cli, data, {}, testArgv);
-
-        const status = await checker.checkCI();
-        assert(status);
-        cli.assertCalledWith(expectedLogs);
-      }
-    );
-
     it('should error if Check suite failed', async() => {
       const cli = new TestCLI();
 
@@ -1927,6 +1891,88 @@ describe('PRChecker', () => {
       assert(status);
       cli.assertCalledWith(expectedLogs);
     });
+
+    it('should ignore startup failures with only skipped check runs',
+      async() => {
+        const cli = new TestCLI();
+
+        const expectedLogs = {
+          ok: [
+            ['Last GitHub CI successful']
+          ]
+        };
+
+        const commits = [{
+          commit: {
+            checkSuites: {
+              nodes: [{
+                status: 'COMPLETED',
+                conclusion: 'STARTUP_FAILURE',
+                checkRuns: {
+                  totalCount: 2,
+                  nodes: [
+                    {
+                      name: 'stale-comment',
+                      status: 'COMPLETED',
+                      conclusion: 'SKIPPED'
+                    },
+                    {
+                      name: 'notable-change',
+                      status: 'COMPLETED',
+                      conclusion: 'SKIPPED'
+                    }
+                  ]
+                }
+              }]
+            }
+          }
+        }];
+        const data = Object.assign({}, baseData, { commits });
+
+        const checker = new PRChecker(cli, data, {}, testArgv);
+
+        const status = await checker.checkCI();
+        assert(status);
+        cli.assertCalledWith(expectedLogs);
+      });
+
+    it('should report a suite failure when check runs are incomplete',
+      async() => {
+        const cli = new TestCLI();
+
+        const expectedLogs = {
+          error: [
+            ['1 GitHub CI job(s) failed:'],
+            ['  - github-actions: STARTUP_FAILURE']
+          ]
+        };
+
+        const commits = [{
+          commit: {
+            checkSuites: {
+              nodes: [{
+                status: 'COMPLETED',
+                conclusion: 'STARTUP_FAILURE',
+                checkRuns: {
+                  totalCount: 2,
+                  nodes: [{
+                    name: 'stale-comment',
+                    status: 'COMPLETED',
+                    conclusion: 'SKIPPED'
+                  }]
+                }
+              }]
+            }
+          }
+        }];
+        const data = Object.assign({}, baseData, { commits });
+
+        const checker = new PRChecker(cli, data, {}, testArgv);
+
+        const status = await checker.checkCI();
+        assert(!status);
+        cli.assertCalledWith(expectedLogs);
+      });
 
     it('should succeed if commit status succeeded', async() => {
       const cli = new TestCLI();
@@ -2055,7 +2101,6 @@ describe('PRChecker', () => {
           author: { login: 'foo' },
           checkSuites: {
             nodes: [{
-              app: { slug: 'github-actions' },
               status: 'COMPLETED',
               conclusion: 'FAILURE',
               checkRuns: {
@@ -2112,7 +2157,6 @@ describe('PRChecker', () => {
           author: { login: 'foo' },
           checkSuites: {
             nodes: [{
-              app: { slug: 'github-actions' },
               status: 'COMPLETED',
               conclusion: 'FAILURE',
               checkRuns: {
@@ -2164,7 +2208,6 @@ describe('PRChecker', () => {
           author: { login: 'foo' },
           checkSuites: {
             nodes: [{
-              app: { slug: 'github-actions' },
               status: 'COMPLETED',
               conclusion: 'CANCELLED'
               // No checkRuns field
@@ -2188,6 +2231,133 @@ describe('PRChecker', () => {
       cli.assertCalledWith(expectedLogs);
     });
 
+    it('should ignore a check suite superseded by a later run', async() => {
+      const cli = new TestCLI();
+
+      const supersededSuite = [{
+        commit: {
+          committedDate: '2017-10-26T12:10:20Z',
+          oid: '9d098ssiskj8dhd39js0sjd0cn2ng4is9n40sj12d',
+          messageHeadline: 'doc: add api description README',
+          author: { login: 'foo' },
+          checkSuites: {
+            nodes: [
+              {
+                status: 'COMPLETED',
+                conclusion: 'CANCELLED',
+                workflowRun: {
+                  event: 'pull_request',
+                  runNumber: 1,
+                  workflow: { id: 'workflow-1' }
+                },
+                checkRuns: {
+                  nodes: [{
+                    name: 'test-linux',
+                    status: 'COMPLETED',
+                    conclusion: 'CANCELLED',
+                    detailsUrl: 'https://github.com/nodejs/node/runs/1'
+                  }]
+                }
+              },
+              {
+                status: 'COMPLETED',
+                conclusion: 'SUCCESS',
+                workflowRun: {
+                  event: 'pull_request',
+                  runNumber: 2,
+                  workflow: { id: 'workflow-1' }
+                },
+                checkRuns: {
+                  nodes: [{
+                    name: 'test-linux',
+                    status: 'COMPLETED',
+                    conclusion: 'SUCCESS',
+                    detailsUrl: 'https://github.com/nodejs/node/runs/2'
+                  }]
+                }
+              }
+            ]
+          }
+        }
+      }];
+
+      const expectedLogs = {
+        ok: [['Last GitHub CI successful']]
+      };
+
+      const data = Object.assign({}, baseData, { commits: supersededSuite });
+      const checker = new PRChecker(cli, data, {}, testArgv);
+
+      const status = await checker.checkCI();
+      assert(status);
+      cli.assertCalledWith(expectedLogs);
+    });
+
+    it('should not let a run supersede one from a different event', async() => {
+      const cli = new TestCLI();
+
+      const differentEvents = [{
+        commit: {
+          committedDate: '2017-10-26T12:10:20Z',
+          oid: '9d098ssiskj8dhd39js0sjd0cn2ng4is9n40sj12d',
+          messageHeadline: 'doc: add api description README',
+          author: { login: 'foo' },
+          checkSuites: {
+            nodes: [
+              {
+                status: 'COMPLETED',
+                conclusion: 'FAILURE',
+                workflowRun: {
+                  event: 'push',
+                  runNumber: 1,
+                  workflow: { id: 'workflow-1' }
+                },
+                checkRuns: {
+                  nodes: [{
+                    name: 'test-linux',
+                    status: 'COMPLETED',
+                    conclusion: 'FAILURE',
+                    detailsUrl: 'https://github.com/nodejs/node/runs/1'
+                  }]
+                }
+              },
+              {
+                status: 'COMPLETED',
+                conclusion: 'SUCCESS',
+                workflowRun: {
+                  event: 'pull_request',
+                  runNumber: 2,
+                  workflow: { id: 'workflow-1' }
+                },
+                checkRuns: {
+                  nodes: [{
+                    name: 'test-linux',
+                    status: 'COMPLETED',
+                    conclusion: 'SUCCESS',
+                    detailsUrl: 'https://github.com/nodejs/node/runs/2'
+                  }]
+                }
+              }
+            ]
+          }
+        }
+      }];
+
+      const expectedLogs = {
+        error: [
+          ['1 GitHub CI job(s) failed:'],
+          ['  - test-linux: FAILURE (https://github.com/nodejs/node/runs/1)']
+        ]
+      };
+
+      const data = Object.assign({}, baseData, { commits: differentEvents });
+      const checker = new PRChecker(cli, data, {}, testArgv);
+
+      const status = await checker.checkCI();
+      assert(!status);
+      cli.assertCalledWith(expectedLogs);
+    });
+
     it('should handle empty checkRuns array', async() => {
       const cli = new TestCLI();
 
@@ -2199,7 +2369,6 @@ describe('PRChecker', () => {
           author: { login: 'foo' },
           checkSuites: {
             nodes: [{
-              app: { slug: 'github-actions' },
               status: 'COMPLETED',
               conclusion: 'FAILURE',
               checkRuns: { nodes: [] }
@@ -2234,7 +2403,6 @@ describe('PRChecker', () => {
           author: { login: 'foo' },
           checkSuites: {
             nodes: [{
-              app: { slug: 'github-actions' },
               status: 'COMPLETED',
               conclusion: 'FAILURE',
               checkRuns: {
@@ -2276,7 +2444,6 @@ describe('PRChecker', () => {
           author: { login: 'foo' },
           checkSuites: {
             nodes: [{
-              app: { slug: 'github-actions' },
               status: 'COMPLETED',
               conclusion: 'FAILURE',
               checkRuns: {

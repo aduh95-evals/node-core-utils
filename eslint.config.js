@@ -1,15 +1,12 @@
-import globals from 'globals';
 import pluginJs from '@eslint/js';
-import neostandard from 'neostandard';
-import nodePlugin from 'eslint-plugin-n';
-import pluginPromise from 'eslint-plugin-promise';
+import neostandard, { plugins } from 'neostandard';
 import importPlugin from 'eslint-plugin-import';
 
 export default [
   pluginJs.configs.recommended,
   ...neostandard({ semi: true }),
-  nodePlugin.configs['flat/recommended'],
-  pluginPromise.configs['flat/recommended'],
+  plugins.n.configs['flat/recommended'],
+  plugins.promise.configs['flat/recommended'],
   importPlugin.flatConfigs.recommended,
   {
     ignores: [
@@ -23,7 +20,6 @@ export default [
   },
   {
     languageOptions: {
-      globals: globals.nodeBuiltin,
       sourceType: 'module',
       ecmaVersion: 'latest',
     },

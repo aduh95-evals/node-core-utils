@@ -23,6 +23,44 @@ query PR($prid: Int!, $owner: String!, $repo: String!) {
           path
         }
       },
+      # CI data is only consumed for the pull request's head commit. Querying
+      # it for every commit multiplies the GraphQL rate-limit cost.
+      headCommit: commits(last: 1) {
+        nodes {
+          commit {
+            oid
+            # 15368 is the GitHub Actions App ID on GitHub.com. Filtering avoids
+            # querying App metadata that GITHUB_TOKEN cannot read for suites
+            # created by third-party Apps such as Jenkins and Codecov.
+            # https://api.github.com/apps/github-actions
+            checkSuites(first: 100, filterBy: { appId: 15368 }) {
+              nodes {
+                conclusion,
+                status,
+                workflowRun {
+                  event
+                  runNumber
+                  workflow {
+                    id
+                  }
+                }
+                checkRuns(first: 40) {
+                  totalCount
+                  nodes {
+                    name
+                    status
+                    conclusion
+                    detailsUrl
+                  }
+                }
+              }
+            }
+            status {
+              state
+            }
+          }
+        }
+      },
       title,
       baseRefName,
       headRefName,

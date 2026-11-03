@@ -23,6 +23,9 @@ import {
 import {
   RunPRJob
 } from '../lib/ci/run_ci.js';
+import { ResumePRJob } from '../lib/ci/resume_ci.js';
+import { checkAvailability } from '../lib/ci/availability.js';
+import { getPRWorkload } from '../lib/ci/workload.js';
 import { writeJson, writeFile } from '../lib/file.js';
 import { getMergedConfig } from '../lib/config.js';
 import { runPromise } from '../lib/run.js';
@@ -53,6 +56,16 @@ const commandKeys = [
 
 const args = yargs(hideBin(process.argv))
   .completion('completion')
+  .command({
+    command: 'available',
+    desc: 'Check whether Jenkins is available for PR CI requests',
+    handler
+  })
+  .command({
+    command: 'workload',
+    desc: 'Print the number of running and queued node-test-pull-request jobs',
+    handler
+  })
   .command({
     command: 'rate <type>',
     desc: 'Calculate the green rate of a CI job in the last 100 runs',
@@ -122,6 +135,26 @@ const args = yargs(hideBin(process.argv))
           describe: 'When set, NCU will query Jenkins recent builds to ensure ' +
                     'there is not an existing job for the same commit.',
           type: 'boolean'
+        })
+        .option('owner', {
+          default: '',
+          describe: 'GitHub repository owner'
+        })
+        .option('repo', {
+          default: '',
+          describe: 'GitHub repository name'
+        });
+    },
+    handler
+  })
+  .command({
+    command: 'resume <prid>',
+    desc: 'Resume the latest CI run for given PR',
+    builder: (yargs) => {
+      yargs
+        .positional('prid', {
+          describe: 'ID of the PR or URL to the PR',
+          type: 'string'
         })
         .option('owner', {
           default: '',
@@ -278,11 +311,13 @@ class RunPRJobCommand {
     return this.argv.prid;
   }
 
-  async start() {
-    const {
-      cli, request, prid, repo, owner
-    } = this;
+  validate() {
+    const { cli, prid, repo, owner } = this;
     let validArgs = true;
+    if (!Number.isSafeInteger(prid) || prid <= 0) {
+      validArgs = false;
+      cli.error('Pull request ID must be a positive integer');
+    }
     if (!repo) {
       validArgs = false;
       cli.error('GitHub repository is missing, please set it via ncu-config ' +
@@ -295,6 +330,13 @@ class RunPRJobCommand {
     }
     if (!validArgs) {
       this.cli.setExitCode(1);
+    }
+    return validArgs;
+  }
+
+  async start() {
+    const { cli, request, prid, repo, owner } = this;
+    if (!this.validate()) {
       return;
     }
     const { certifySafe, checkForDuplicates } = this.argv;
@@ -303,6 +345,20 @@ class RunPRJobCommand {
       certifySafe, checkForDuplicates);
     if (!(await jobRunner.start())) {
       this.cli.setExitCode(1);
+      process.exitCode = 1;
+    }
+  }
+}
+
+class ResumePRJobCommand extends RunPRJobCommand {
+  async start() {
+    const { cli, request, prid, repo, owner } = this;
+    if (!this.validate()) {
+      return;
+    }
+    const jobRunner = new ResumePRJob(cli, request, owner, repo, prid);
+    if (!(await jobRunner.resume())) {
+      cli.setExitCode(1);
       process.exitCode = 1;
     }
   }
@@ -554,7 +610,34 @@ class DailyCommand extends CICommand {
   }
 }
 
+async function checkJenkins(command) {
+  try {
+    let jenkins;
+    try {
+      const credentials = await auth({ github: false, jenkins: true });
+      jenkins = credentials.jenkins;
+    } catch {
+      throw new Error('Configure username and jenkins_token with ncu-config');
+    }
+    const request = new Request({ jenkins });
+    if (command === 'available') {
+      await checkAvailability(request);
+    } else {
+      console.log(await getPRWorkload(request));
+    }
+  } catch (err) {
+    const action = command === 'available'
+      ? 'check Jenkins availability'
+      : 'read the PR CI workload';
+    console.error(`Unable to ${action}: ${err.message}`);
+    process.exitCode = 1;
+  }
+}
+
 async function main(command, argv) {
+  if (command === 'available' || command === 'workload') {
+    return checkJenkins(command);
+  }
   const cli = new CLI();
   const credentials = await auth({
     github: true,
@@ -565,7 +648,8 @@ async function main(command, argv) {
   let commandHandler;
   // Prepare queue.
   switch (command) {
-    case 'run': {
+    case 'run':
+    case 'resume': {
       const maybeURL = URL.parse(argv.prid);
       if (maybeURL?.host === 'github.com') {
         const [, owner, repo, , prid, , commit_sha] = maybeURL.pathname.split('/');
@@ -575,7 +659,8 @@ async function main(command, argv) {
         argv.prid = prid;
       }
       argv.prid = Number(argv.prid);
-      const jobRunner = new RunPRJobCommand(cli, request, argv);
+      const Command = command === 'run' ? RunPRJobCommand : ResumePRJobCommand;
+      const jobRunner = new Command(cli, request, argv);
       return jobRunner.start();
     }
     case 'rate': {

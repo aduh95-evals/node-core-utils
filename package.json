@@ -1,6 +1,6 @@
 {
   "name": "@node-core/utils",
-  "version": "6.4.0",
+  "version": "7.6.0",
   "description": "Utilities for Node.js core collaborators",
   "type": "module",
   "engines": {
@@ -35,38 +35,29 @@
   "bundleDependencies": true,
   "dependencies": {
     "@inquirer/prompts": "^7.4.1",
-    "@listr2/prompt-adapter-enquirer": "^2.0.12",
+    "@listr2/prompt-adapter-inquirer": "^4.2.7",
     "@node-core/caritat": "^1.6.0",
     "@pkgjs/nv": "^0.3.0",
     "branch-diff": "^3.1.1",
-    "chalk": "^6.0.0",
     "changelog-maker": "^4.4.1",
-    "cheerio": "^1.0.0",
     "core-validate-commit": "^6.0.0",
-    "figures": "^6.1.0",
     "ghauth": "^7.0.1",
     "git-secure-tag": "^2.3.1",
+    "htmlparser2": "^12.0.0",
     "js-yaml": "^5.2.1",
-    "listr2": "^9.0.5",
-    "lodash": "^4.17.21",
-    "log-symbols": "^7.0.0",
-    "ora": "^9.0.0",
-    "replace-in-file": "^8.3.0",
+    "listr2": "^11.1.0",
     "semver": "^7.7.1",
     "smol-toml": "^1.7.0",
     "undici": "^8.3.0",
-    "which": "^7.0.0",
-    "yargs": "^18.0.0"
+    "yargs": "^18.0.0",
+    "yocto-spinner": "^1.2.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@reporters/github": "^1.7.2",
+    "@reporters/github": "^1.12.0",
     "c8": "^12.0.0",
     "eslint": "^9.39.4",
     "eslint-plugin-import": "^2.32.0",
-    "eslint-plugin-n": "^17.24.0",
-    "eslint-plugin-promise": "^7.3.0",
-    "globals": "^17.4.0",
     "neostandard": "^0.13.0",
     "sinon": "^22.0.0"
   }

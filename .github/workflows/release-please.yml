@@ -5,29 +5,31 @@ on:
     branches:
       - main
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
       release_created:  ${{ steps.release.outputs.release_created }}
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
         with:
           release-type: node
-          token: ${{ secrets.RELEASE_PLEASE_GITHUB_TOKEN }}
   npm-publish:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24.x
           registry-url: 'https://registry.npmjs.org'
+      - run: npm ci --omit=dev
       - run: npm publish --access public --provenance
