@@ -746,6 +746,33 @@ describe('security_release: push vulnerabilities.json', () => {
     assert.strictEqual(calls.filter(([n]) => n === 'prompt').length, 2);
   });
 
+  it('skips the branch lookup when told the branch does not exist', async() => {
+    const { release, calls } = setup({ branchSHA: 'branch-sha' });
+    await release.pushVulnerabilitiesJSON('{}\n', 'msg', { branchExists: false });
+    assert.deepStrictEqual(calls.filter(([n]) => n !== 'prompt').map(([n]) => n), [
+      'getBranchSHA',
+      'createBranch',
+      'createOrUpdateFile'
+    ]);
+    assert.strictEqual(calls[0][1], 'main');
+  });
+
+  it('refuses to start when the branch already exists', async(t) => {
+    const { release } = setup({ branchSHA: 'branch-sha' });
+    release.cli.info = () => {};
+    const exit = t.mock.method(process, 'exit', () => {
+      throw new Error('exit');
+    });
+    await assert.rejects(() => release.checkBranchDoesNotExist(), /exit/);
+    assert.deepStrictEqual(exit.mock.calls[0].arguments, [1]);
+  });
+
+  it('starts when the branch does not exist', async() => {
+    const { release, calls } = setup({});
+    await release.checkBranchDoesNotExist();
+    assert.deepStrictEqual(calls, [['getBranchSHA', 'next-security-release']]);
+  });
+
   it('updates the file on an existing branch', async() => {
     const { release, calls } = setup({ branchSHA: 'branch-sha', fileSHA: 'file-sha' });
     await release.pushVulnerabilitiesJSON('{}\n', 'msg');

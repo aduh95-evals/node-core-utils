@@ -498,6 +498,7 @@ following the [Security Release Process][] document.
 It will retrieve all the triaged HackerOne reports, generate the `vulnerabilities.json`,
 and push it to the `next-security-release` branch of `nodejs-private/security-release`
 using the GitHub API, so it doesn't need a local clone of that repository.
+It aborts if the `next-security-release` branch already exists upstream.
 
 ### `git node security --apply-patches`
 
