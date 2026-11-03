@@ -491,6 +491,17 @@ $ ncu-config --global set h1_username $H1_TOKEN
   access.
 - `h1_username`: HackerOne API Token username.
 
+`git node security --start` pushes `vulnerabilities.json` to
+`nodejs-private/security-release` through the GitHub API using the token NCU
+is configured with, not your local git credentials. That token needs:
+
+- Classic token: the `repo` scope.
+- Fine-grained token: access to `nodejs-private/security-release` with
+  **Contents: Read and write** (to create the `next-security-release` branch
+  and commit the file) and **Pull requests: Read and write** (to open the
+  pull request), plus **Pull requests: Read** on `nodejs-private/node-private`
+  to look up patch authors.
+
 ### `git node security --start`
 
 This command creates the Next Security Issue in Node.js private repository
