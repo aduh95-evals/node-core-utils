@@ -688,6 +688,80 @@ describe('security_release: include all triaged reports', () => {
   });
 });
 
+describe('security_release: push vulnerabilities.json', () => {
+  function setup({ branchSHA, fileSHA }) {
+    const calls = [];
+    const release = new PrepareSecurityRelease({
+      SPINNER_STATUS: { FAILED: 'failed', INFO: 'info' },
+      startSpinner() {},
+      stopSpinner() {},
+      prompt(message) {
+        calls.push(['prompt', message]);
+        return true;
+      }
+    });
+    release.req = {
+      getBranchSHA({ branch }) {
+        calls.push(['getBranchSHA', branch]);
+        return branch === 'main' ? 'main-sha' : branchSHA;
+      },
+      getFileSHA(opts) {
+        calls.push(['getFileSHA', opts]);
+        return fileSHA;
+      },
+      createBranch(opts) {
+        calls.push(['createBranch', opts]);
+      },
+      createOrUpdateFile(opts) {
+        calls.push(['createOrUpdateFile', opts]);
+        return { commit: { html_url: 'https://example.com/commit' } };
+      }
+    };
+    return { release, calls };
+  }
+
+  const file = {
+    owner: 'nodejs-private',
+    repo: 'security-release',
+    path: 'security-release/next-security-release/vulnerabilities.json',
+    branch: 'next-security-release',
+    content: '{}\n',
+    message: 'msg'
+  };
+
+  it('creates the branch from main when missing', async() => {
+    const { release, calls } = setup({});
+    await release.pushVulnerabilitiesJSON('{}\n', 'msg');
+    assert.deepStrictEqual(calls.filter(([n]) => n !== 'prompt'), [
+      ['getBranchSHA', 'next-security-release'],
+      ['getBranchSHA', 'main'],
+      ['createBranch', {
+        owner: 'nodejs-private',
+        repo: 'security-release',
+        branch: 'next-security-release',
+        sha: 'main-sha'
+      }],
+      ['createOrUpdateFile', { ...file, sha: undefined }]
+    ]);
+    assert.strictEqual(calls.filter(([n]) => n === 'prompt').length, 2);
+  });
+
+  it('updates the file on an existing branch', async() => {
+    const { release, calls } = setup({ branchSHA: 'branch-sha', fileSHA: 'file-sha' });
+    await release.pushVulnerabilitiesJSON('{}\n', 'msg');
+    assert.deepStrictEqual(calls.filter(([n]) => n !== 'prompt'), [
+      ['getBranchSHA', 'next-security-release'],
+      ['getFileSHA', {
+        owner: 'nodejs-private',
+        repo: 'security-release',
+        path: 'security-release/next-security-release/vulnerabilities.json',
+        ref: 'next-security-release'
+      }],
+      ['createOrUpdateFile', { ...file, sha: 'file-sha' }]
+    ]);
+  });
+});
+
 describe('security_blog: pre-release severity wording', () => {
   it('does not include severity counts in the summary', () => {
     const blog = new SecurityBlog();
