@@ -35,7 +35,7 @@ function repository(t) {
   return directory;
 }
 
-const cli = { info() {}, ok() {}, prompt: async() => true };
+const cli = { info() {}, ok() {}, log() {}, prompt: async() => true };
 
 describe('security release git state', { concurrency: false }, () => {
   it('creates a new release branch from the current HEAD', async(t) => {
