@@ -10,7 +10,7 @@ import { writeSecurityReleaseDraft } from '../../lib/security-release/draft.js';
 
 import {
   checkoutOnSecurityReleaseBranch,
-  commitAndPushVulnerabilitiesJSON,
+  stageSecurityReleaseChanges,
   NEXT_SECURITY_RELEASE_REPOSITORY
 } from '../../lib/security-release/security-release.js';
 
@@ -73,15 +73,6 @@ describe('security release git state', { concurrency: false }, () => {
       git('rev-parse', '--abbrev-ref', '@{upstream}'), 'origin/next-security-release');
   });
 
-  it('does not switch branches when the checkout is declined', async(t) => {
-    repository(t);
-    await assert.rejects(checkoutOnSecurityReleaseBranch({
-      ...cli, prompt: async() => false
-    }, NEXT_SECURITY_RELEASE_REPOSITORY), /Aborted/);
-    assert.strictEqual(git('branch', '--show-current'), 'main');
-    assert.strictEqual(git('branch', '--list', 'next-security-release'), '');
-  });
-
   it('rejects unrelated staged work before staging the release file', async(t) => {
     repository(t);
     fs.writeFileSync('unrelated notes.txt', 'User work\n');
@@ -89,7 +80,7 @@ describe('security release git state', { concurrency: false }, () => {
     fs.writeFileSync('vulnerabilities.json', '{}\n');
     const index = git('write-tree');
     const head = git('rev-parse', 'HEAD');
-    await assert.rejects(commitAndPushVulnerabilitiesJSON(
+    await assert.rejects(stageSecurityReleaseChanges(
       'vulnerabilities.json', 'Prepare release',
       { cli, repository: NEXT_SECURITY_RELEASE_REPOSITORY }
     ), /Unrelated staged changes/);
@@ -98,28 +89,33 @@ describe('security release git state', { concurrency: false }, () => {
     assert.strictEqual(fs.readFileSync('unrelated notes.txt', 'utf8'), 'User work\n');
   });
 
-  it('allows staged release files and stops at a declined commit', async(t) => {
+  it('stages release files with a pre-filled commit message', async(t) => {
     repository(t);
     fs.mkdirSync('security-release');
     fs.writeFileSync('security-release/vulnerabilities.json', '{}\n');
     git('add', 'security-release/vulnerabilities.json');
-    const index = git('write-tree');
-    const prompts = [];
-    await assert.rejects(commitAndPushVulnerabilitiesJSON(
+    fs.writeFileSync('security-release/notes.md', 'Notes\n');
+    const head = git('rev-parse', 'HEAD');
+    await stageSecurityReleaseChanges(
       'security-release', 'Prepare release', {
-        cli: {
-          ...cli,
-          async prompt(message) {
-            prompts.push(message);
-            return false;
-          }
-        },
+        cli: { ...cli, prompt: async() => assert.fail('Staging must not prompt') },
         repository: NEXT_SECURITY_RELEASE_REPOSITORY
       }
-    ), /Aborted/);
-    assert.strictEqual(prompts.length, 1);
-    assert.match(prompts[0], /git commit/);
-    assert.strictEqual(git('write-tree'), index);
+    );
+    assert.strictEqual(git('rev-parse', 'HEAD'), head);
+    assert.strictEqual(git('diff', '--cached', '--name-only'),
+      'security-release/notes.md\nsecurity-release/vulnerabilities.json');
+    const messagePath = git('rev-parse', '--git-path', 'MERGE_MSG');
+    assert.strictEqual(fs.readFileSync(messagePath, 'utf8'), 'Prepare release\n');
+
+    fs.writeFileSync('security-release/vulnerabilities.json', '[]\n');
+    await stageSecurityReleaseChanges(
+      'security-release', 'Update release', {
+        cli, repository: NEXT_SECURITY_RELEASE_REPOSITORY
+      }
+    );
+    assert.strictEqual(fs.readFileSync(messagePath, 'utf8'),
+      'Prepare release\nUpdate release\n');
   });
 
   it('rejects an existing draft before prompting or fetching reports', async(t) => {
@@ -170,11 +166,8 @@ describe('security release git state', { concurrency: false }, () => {
     assert.strictEqual(git('status', '--porcelain'), '');
   });
 
-  it('creates a local draft without committing when publication is declined', async(t) => {
+  it('stages a local draft without committing when publication is declined', async(t) => {
     const dir = repository(t);
-    fs.writeFileSync('user-notes.txt', 'Staged user work\n');
-    git('add', 'user-notes.txt');
-    const index = git('write-tree');
     const head = git('rev-parse', 'HEAD');
     const release = new PrepareSecurityRelease({
       ...cli, startSpinner() {}, stopSpinner() {}
@@ -183,7 +176,7 @@ describe('security release git state', { concurrency: false }, () => {
     release.getDependencyUpdates = async() => ({
       undici: { affectedVersions: { '24.x': 'https://github.com/nodejs/node/pull/1' } }
     });
-    release.promptReviewVulnerabilitiesJSON = async() => false;
+    release.promptCreatePR = async() => false;
     release.createPullRequest = async() => assert.fail('Do not publish a local draft');
 
     await release.startVulnerabilitiesJSONCreation('2026/10/06', 'Release');
@@ -194,7 +187,11 @@ describe('security release git state', { concurrency: false }, () => {
     assert.deepStrictEqual(draft.reports, []);
     assert.strictEqual(draft.dependencies.undici.affectedVersions['24.x'],
       'https://github.com/nodejs/node/pull/1');
-    assert.strictEqual(git('write-tree'), index);
+    assert.strictEqual(git('diff', '--cached', '--name-only'),
+      'security-release/next-security-release/vulnerabilities.json');
+    assert.strictEqual(
+      fs.readFileSync(git('rev-parse', '--git-path', 'MERGE_MSG'), 'utf8'),
+      'chore: create vulnerabilities.json for next security release\n');
     assert.strictEqual(git('rev-parse', 'HEAD'), head);
     assert.strictEqual(git('branch', '--show-current'), 'next-security-release');
   });

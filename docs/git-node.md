@@ -577,11 +577,13 @@ $ git node vote \
 
 Manage or starts a security release process.
 
-Every `git node security` action asks for permission before each mutating step.
-Read-only operations, such as reading files or fetching report data, run without
-confirmation. Each confirmation names the command or service action that will
-write state and explains the side effect, such as writing files, committing and
-pushing changes, creating issues, or updating HackerOne reports.
+Every `git node security` action asks for permission before each step that
+changes remote state, such as creating issues or pull requests, or updating
+HackerOne reports. Local changes run without confirmation: files are written
+and staged, and the commit message is pre-filled in `.git/MERGE_MSG`, so it is
+picked up by `git commit` and editors such as VS Code. The CLI never commits or
+pushes; review the staged diff, then commit and push
+`next-security-release` yourself.
 
 <a id="git-node-security-prerequisites"></a>
 
@@ -605,13 +607,13 @@ Release pull request in `nodejs-private/security-release`, following the
 [Security Release Process][] document. It retrieves all pages of triaged
 HackerOne reports and uses the same candidate list for exclusions and selection.
 The CLI prompts for the release date, report selection, and dependency updates
-before writing the draft. Commit, push, and PR creation remain separate
-confirmed steps. An existing `next-security-release` branch is checked out
+before writing and staging the draft. Commit and push it before confirming PR
+creation. An existing `next-security-release` branch is checked out
 without resetting it. If only `origin/next-security-release` exists locally,
 the command creates a tracking branch from that ref. Fetch first when remote
 state may have changed.
 
-Security release commits reject unrelated staged changes before staging their
+Security release commands reject unrelated staged changes before staging their
 own files. Commit or unstage those changes before continuing. `--start` refuses
 to overwrite an existing draft, including one found after switching branches.
 Use `--sync`, `--add-report`, or `--remove-report` to update that release.
@@ -652,8 +654,7 @@ After reviewing the prepared data, local tools can use
 repository path. The helper validates the draft and creates
 `security-release/next-security-release/vulnerabilities.json` with an exclusive
 write, so an existing file cannot be overwritten. It does not change Git state
-or publish anything. Review and authorization belong to the calling tool; the
-CLI retains its directory and file-write confirmations.
+or publish anything. Review and authorization belong to the calling tool.
 
 ### `git node security --apply-patches`
 
