@@ -581,9 +581,9 @@ Every `git node security` action asks for permission before each step that
 changes remote state, such as creating issues or pull requests, or updating
 HackerOne reports. Local changes run without confirmation: files are written
 and staged, and the commit message is pre-filled in `.git/MERGE_MSG`, so it is
-picked up by `git commit` and editors such as VS Code. The CLI never commits or
-pushes; review the staged diff, then commit and push
-`next-security-release` yourself.
+picked up by `git commit` and editors such as VS Code. Apart from `--start`,
+which pushes its draft through the GitHub API, the CLI never commits or pushes;
+review the staged diff, then commit and push `next-security-release` yourself.
 
 <a id="git-node-security-prerequisites"></a>
 
@@ -600,22 +600,64 @@ $ ncu-config --global set h1_username $H1_TOKEN
   access.
 - `h1_username`: HackerOne API Token username.
 
+`git node security --start` pushes `vulnerabilities.json` to
+`nodejs-private/security-release` through the GitHub API using the token NCU
+is configured with, not your local git credentials. That token needs:
+
+- Classic token: the `repo` scope.
+- Fine-grained token: access to `nodejs-private/security-release` with
+  **Contents: Read and write** (to create the `next-security-release` branch
+  and commit the file) and **Pull requests: Read and write** (to open the
+  pull request), plus **Pull requests: Read** on `nodejs-private/node-private`
+  to look up patch authors.
+
+#### Optional: reserve CVEs through the OpenJS Foundation CNA
+
+By default `--request-cve` reserves CVE ids through HackerOne, which acts as
+the Node.js CNA. Set `cve_source` to `openjs-cna` to reserve them through the
+OpenJS Foundation CNA instead. HackerOne is still used for the bug-bounty
+workflow (triage, `--sync`, disclosure) and is updated with the resulting CVE
+id, so reports stay in sync.
+
+```console
+$ ncu-config --global set cve_source openjs-cna
+$ ncu-config --global set -x openjs_cna_token
+$ ncu-config --global set openjs_cna_worker_url https://<deployment>.workers.dev
+```
+
+- `cve_source`: `hackerone` (default) or `openjs-cna`.
+- `openjs_cna_token`: **secret**, store it encrypted with `-x`. The bucket
+  token issued by the OpenJS CNA coordinators, in `<bucket>:<secret>` form
+  (for example `prod_nodejs:<256 hex chars>`).
+- `openjs_cna_worker_url`: the OpenJS CNA API base URL.
+- `openjs_cna_timeout`: optional, seconds to wait for a reservation before
+  pausing (default `600`).
+
+Reservations are asynchronous. The command saves the correlation id of each
+dispatched reservation to `vulnerabilities.json` (`pendingCve`) before
+waiting, so an interrupted or timed-out run never loses a reserved id. On a
+supervised bucket the reservation waits for an OpenJS CNA coordinator to
+approve it, which can exceed the timeout: re-run
+`git node security --request-cve` to resume the pending reservations.
+
+To revert to HackerOne, delete `cve_source` or set it back to `hackerone`.
+
 ### `git node security --start`
 
 This command prepares `vulnerabilities.json` and can open the Next Security
 Release pull request in `nodejs-private/security-release`, following the
 [Security Release Process][] document. It retrieves all pages of triaged
 HackerOne reports and uses the same candidate list for exclusions and selection.
-The CLI prompts for the release date, report selection, and dependency updates
-before writing and staging the draft. Commit and push it before confirming PR
-creation. An existing `next-security-release` branch is checked out
-without resetting it. If only `origin/next-security-release` exists locally,
-the command creates a tracking branch from that ref. Fetch first when remote
-state may have changed.
+The CLI prompts for the release date, report selection, and dependency updates,
+then generates the draft in memory (optionally opening it in your editor for
+review; the edited file must still be a valid draft). It pushes the draft to the
+`next-security-release` branch of `nodejs-private/security-release` using the
+GitHub API, so it doesn't need a local clone of that repository. Branch
+creation, the push, and PR creation remain separate confirmed steps.
 
-Security release commands reject unrelated staged changes before staging their
-own files. Commit or unstage those changes before continuing. `--start` refuses
-to overwrite an existing draft, including one found after switching branches.
+`--start` aborts before prompting for reports if the `next-security-release`
+branch already exists upstream, or if `main` already contains
+`security-release/next-security-release/vulnerabilities.json`.
 Use `--sync`, `--add-report`, or `--remove-report` to update that release.
 
 #### Preparing release data without the CLI
@@ -655,6 +697,8 @@ repository path. The helper validates the draft and creates
 `security-release/next-security-release/vulnerabilities.json` with an exclusive
 write, so an existing file cannot be overwritten. It does not change Git state
 or publish anything. Review and authorization belong to the calling tool.
+`git node security --start` does not use it: it publishes through the GitHub
+API instead of writing to a local checkout.
 
 ### `git node security --apply-patches`
 

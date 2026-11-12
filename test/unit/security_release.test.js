@@ -1,5 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import SecurityBlog from '../../lib/security_blog.js';
 import PrepareSecurityRelease, {
@@ -9,7 +12,9 @@ import PrepareSecurityRelease, {
   getNextTuesdayReleaseDateChoices,
   getNextTuesdayReleaseDates
 } from '../../lib/prepare_security.js';
-import UpdateSecurityRelease from '../../lib/update_security_release.js';
+import UpdateSecurityRelease, {
+  resolveCveSource
+} from '../../lib/update_security_release.js';
 import {
   getAffectedVersionLines,
   getDependencyUpdates,
@@ -761,6 +766,182 @@ describe('security_release: include all triaged reports', () => {
   });
 });
 
+describe('security_release: push vulnerabilities.json', () => {
+  function setup({ branchSHA, fileSHA }) {
+    const calls = [];
+    const release = new PrepareSecurityRelease({
+      SPINNER_STATUS: { FAILED: 'failed', INFO: 'info' },
+      startSpinner() {},
+      stopSpinner() {},
+      prompt(message) {
+        calls.push(['prompt', message]);
+        return true;
+      }
+    });
+    release.req = {
+      getBranchSHA({ branch }) {
+        calls.push(['getBranchSHA', branch]);
+        return branch === 'main' ? 'main-sha' : branchSHA;
+      },
+      getFileSHA(opts) {
+        calls.push(['getFileSHA', opts]);
+        return fileSHA;
+      },
+      createBranch(opts) {
+        calls.push(['createBranch', opts]);
+      },
+      createOrUpdateFile(opts) {
+        calls.push(['createOrUpdateFile', opts]);
+        return { commit: { html_url: 'https://example.com/commit' } };
+      }
+    };
+    return { release, calls };
+  }
+
+  const file = {
+    owner: 'nodejs-private',
+    repo: 'security-release',
+    path: 'security-release/next-security-release/vulnerabilities.json',
+    branch: 'next-security-release',
+    content: '{}\n',
+    message: 'msg'
+  };
+
+  it('creates the branch from main when missing', async() => {
+    const { release, calls } = setup({});
+    await release.pushVulnerabilitiesJSON('{}\n', 'msg');
+    assert.deepStrictEqual(calls.filter(([n]) => n !== 'prompt'), [
+      ['getBranchSHA', 'next-security-release'],
+      ['getBranchSHA', 'main'],
+      ['createBranch', {
+        owner: 'nodejs-private',
+        repo: 'security-release',
+        branch: 'next-security-release',
+        sha: 'main-sha'
+      }],
+      ['createOrUpdateFile', { ...file, sha: undefined }]
+    ]);
+    assert.strictEqual(calls.filter(([n]) => n === 'prompt').length, 2);
+  });
+
+  it('skips the branch lookup when told the branch does not exist', async() => {
+    const { release, calls } = setup({ branchSHA: 'branch-sha' });
+    await release.pushVulnerabilitiesJSON('{}\n', 'msg', { branchExists: false });
+    assert.deepStrictEqual(calls.filter(([n]) => n !== 'prompt').map(([n]) => n), [
+      'getBranchSHA',
+      'createBranch',
+      'createOrUpdateFile'
+    ]);
+    assert.strictEqual(calls[0][1], 'main');
+  });
+
+  it('refuses to start when the branch already exists', async() => {
+    const { release } = setup({ branchSHA: 'branch-sha' });
+    await assert.rejects(() => release.checkBranchDoesNotExist(),
+      /A security release seems to be in progress/);
+  });
+
+  it('refuses to start when a draft already exists on main', async() => {
+    const { release } = setup({ fileSHA: 'file-sha' });
+    await assert.rejects(() => release.checkBranchDoesNotExist(), /draft already exists/);
+  });
+
+  it('starts when the branch does not exist', async() => {
+    const { release, calls } = setup({});
+    await release.checkBranchDoesNotExist();
+    assert.deepStrictEqual(calls, [
+      ['getBranchSHA', 'next-security-release'],
+      ['getFileSHA', {
+        owner: 'nodejs-private',
+        repo: 'security-release',
+        path: 'security-release/next-security-release/vulnerabilities.json',
+        ref: 'main'
+      }]
+    ]);
+  });
+
+  it('updates the file on an existing branch', async() => {
+    const { release, calls } = setup({ branchSHA: 'branch-sha', fileSHA: 'file-sha' });
+    await release.pushVulnerabilitiesJSON('{}\n', 'msg');
+    assert.deepStrictEqual(calls.filter(([n]) => n !== 'prompt'), [
+      ['getBranchSHA', 'next-security-release'],
+      ['getFileSHA', {
+        owner: 'nodejs-private',
+        repo: 'security-release',
+        path: 'security-release/next-security-release/vulnerabilities.json',
+        ref: 'next-security-release'
+      }],
+      ['createOrUpdateFile', { ...file, sha: 'file-sha' }]
+    ]);
+  });
+});
+
+describe('security_release: edit vulnerabilities.json', () => {
+  // Fake editor: replaces the file with the contents of the next answer.
+  function useEditor(t, answers) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ncu-test-editor-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const answersPath = path.join(dir, 'answers.json');
+    fs.writeFileSync(answersPath, JSON.stringify(answers));
+    const script = path.join(dir, 'editor.mjs');
+    fs.writeFileSync(script, `
+      import fs from 'node:fs';
+      const answers = JSON.parse(fs.readFileSync(${JSON.stringify(answersPath)}, 'utf8'));
+      fs.writeFileSync(process.argv[2], answers.shift());
+      fs.writeFileSync(${JSON.stringify(answersPath)}, JSON.stringify(answers));
+    `);
+    const previous = process.env.GIT_EDITOR;
+    process.env.GIT_EDITOR = `"${process.execPath}" "${script}"`;
+    t.after(() => {
+      if (previous === undefined) delete process.env.GIT_EDITOR;
+      else process.env.GIT_EDITOR = previous;
+    });
+  }
+
+  const normalized = JSON.stringify({
+    releaseDate: '2026-10-06', reports: [], dependencies: {}
+  }, null, 2) + '\n';
+
+  it('returns the edited content, normalized', async(t) => {
+    useEditor(t, ['{"releaseDate":"2026/10/06","reports":[]}']);
+    const release = new PrepareSecurityRelease({});
+    assert.strictEqual(await release.editVulnerabilitiesJSON('{}\n'), normalized);
+  });
+
+  it('offers to edit again when the result is not valid', async(t) => {
+    useEditor(t, [
+      '{',
+      '{"releaseDate":"2026/10/06"}',
+      '{"releaseDate":"2026/10/06","reports":[]}'
+    ]);
+    const prompts = [];
+    const release = new PrepareSecurityRelease({
+      error() {},
+      prompt(message) {
+        prompts.push(message);
+        return true;
+      }
+    });
+    assert.strictEqual(await release.editVulnerabilitiesJSON('{}\n'), normalized);
+    assert.deepStrictEqual(prompts, [
+      'Edit vulnerabilities.json again?',
+      'Edit vulnerabilities.json again?'
+    ]);
+  });
+
+  it('aborts when the user does not fix invalid JSON', async(t) => {
+    useEditor(t, ['{']);
+    const release = new PrepareSecurityRelease({
+      error() {},
+      prompt() {
+        return false;
+      }
+    });
+    await assert.rejects(() => release.editVulnerabilitiesJSON('{}\n'),
+      /vulnerabilities\.json is not valid/);
+  });
+});
+
 describe('security_blog: pre-release severity wording', () => {
   it('does not include severity counts in the summary', () => {
     const blog = new SecurityBlog();
@@ -1054,5 +1235,253 @@ describe('security_release: getDependencyUpdates', () => {
   it('returns an empty list when there are no dependency updates', () => {
     assert.deepStrictEqual(getDependencyUpdates(undefined), []);
     assert.deepStrictEqual(getDependencyUpdates({}), []);
+  });
+});
+
+describe('security_release: OpenJS CNA reservation', () => {
+  function createCnaTimeoutError(correlationId) {
+    const error = new Error(`OpenJS CNA run ${correlationId} did not complete`);
+    error.name = 'CnaTimeoutError';
+    error.correlationId = correlationId;
+    return error;
+  }
+
+  function createCli(events) {
+    return {
+      SPINNER_STATUS: { FAILED: 'failed' },
+      info(message) { events.push(`info:${message}`); },
+      warn(message) { events.push(`warn:${message}`); },
+      error(message) {
+        events.push(`error:${message instanceof Error ? message.message : message}`);
+      },
+      startSpinner(message) { events.push(`spinner:${message}`); },
+      stopSpinner(message, status) { events.push(`stop:${status ?? 'ok'}:${message}`); },
+      prompt() { return true; }
+    };
+  }
+
+  it('defaults cve_source to hackerone and rejects unknown values', () => {
+    assert.strictEqual(resolveCveSource({}), 'hackerone');
+    assert.strictEqual(resolveCveSource({ cve_source: '' }), 'hackerone');
+    assert.strictEqual(resolveCveSource({ cve_source: 'hackerone' }), 'hackerone');
+    assert.strictEqual(resolveCveSource({ cve_source: 'openjs-cna' }), 'openjs-cna');
+    assert.throws(
+      () => resolveCveSource({ cve_source: 'mitre' }),
+      /Unknown cve_source "mitre"; expected one of: hackerone, openjs-cna/
+    );
+  });
+
+  it('persists the correlation id before waiting and records the reserved id', async() => {
+    const events = [];
+    const release = new UpdateSecurityRelease(createCli(events));
+    release.getCnaTimeoutMs = () => 1_000;
+    release.persistPendingCve = async(content, report) => {
+      events.push(`persist:${report.id}:${JSON.stringify(report.pendingCve)}`);
+    };
+    const req = {
+      async cnaDispatch(operation) {
+        events.push(`dispatch:${operation}`);
+        return { correlation_id: 'corr-1', status: 'queued' };
+      },
+      async cnaWaitForCompletion(correlationId, { timeoutMs }) {
+        events.push(`wait:${correlationId}:${timeoutMs}`);
+        return { status: 'completed', conclusion: 'success', result: { cve_id: 'CVE-2026-1' } };
+      }
+    };
+    const report = { id: '1', cveIds: [] };
+    const content = { reports: [report] };
+
+    const reserved = await release.reserveCveViaOpenJsCna({
+      req, report, content, patchedVersions: ['24.18.1']
+    });
+
+    assert.strictEqual(reserved, true);
+    assert.deepStrictEqual(report.cveIds, ['CVE-2026-1']);
+    assert.deepStrictEqual(report.patchedVersions, ['24.18.1']);
+    assert.strictEqual(report.pendingCve, undefined);
+    const order = events
+      .filter((event) => /^(dispatch|persist|wait):/.test(event))
+      .map((event) => event.split(':')[0]);
+    assert.deepStrictEqual(order, ['dispatch', 'persist', 'wait']);
+    const persisted = events.find((event) => event.startsWith('persist:'));
+    const pending = JSON.parse(persisted.slice('persist:1:'.length));
+    assert.strictEqual(pending.correlationId, 'corr-1');
+    assert.deepStrictEqual(pending.patchedVersions, ['24.18.1']);
+    assert.ok(pending.dispatchedAt);
+    assert.ok(events.includes('wait:corr-1:1000'));
+  });
+
+  it('keeps the pending marker when the wait times out', async() => {
+    const events = [];
+    const release = new UpdateSecurityRelease(createCli(events));
+    release.getCnaTimeoutMs = () => 1_000;
+    release.persistPendingCve = async() => { events.push('persist'); };
+    const req = {
+      async cnaWaitForCompletion(correlationId) {
+        throw createCnaTimeoutError(correlationId);
+      }
+    };
+    const report = {
+      id: '1',
+      cveIds: [],
+      pendingCve: { correlationId: 'corr-1', patchedVersions: ['24.18.1'] }
+    };
+
+    const content = { reports: [report] };
+    const reserved = await release.waitForReservedCve({ req, report, content });
+
+    assert.strictEqual(reserved, false);
+    assert.deepStrictEqual(report.cveIds, []);
+    assert.strictEqual(report.pendingCve.correlationId, 'corr-1');
+    assert.ok(!events.includes('persist'), 'timeout must not rewrite the file');
+    assert.ok(events.some((event) =>
+      event.startsWith('warn:Still waiting on corr-1') && event.includes('--request-cve')));
+  });
+
+  it('drops and persists the cleared marker when the run fails', async() => {
+    const events = [];
+    const release = new UpdateSecurityRelease(createCli(events));
+    release.getCnaTimeoutMs = () => 1_000;
+    release.persistPendingCve = async(content, persisted) => {
+      events.push(`persist:${persisted.pendingCve === undefined ? 'cleared' : 'pending'}`);
+    };
+    const req = {
+      async cnaWaitForCompletion(correlationId) {
+        throw new Error(`OpenJS CNA run ${correlationId} concluded with 'failure'`);
+      }
+    };
+    const report = {
+      id: '1',
+      cveIds: [],
+      pendingCve: { correlationId: 'corr-1', patchedVersions: ['24.18.1'] }
+    };
+
+    const content = { reports: [report] };
+    const reserved = await release.waitForReservedCve({ req, report, content });
+
+    assert.strictEqual(reserved, false);
+    assert.strictEqual(report.pendingCve, undefined);
+    assert.ok(events.includes("error:OpenJS CNA run corr-1 concluded with 'failure'"));
+    assert.ok(events.includes('persist:cleared'));
+  });
+
+  it('drops the pending marker when the run returns no CVE id', async() => {
+    const events = [];
+    const release = new UpdateSecurityRelease(createCli(events));
+    release.getCnaTimeoutMs = () => 1_000;
+    release.persistPendingCve = async(content, persisted) => {
+      events.push(`persist:${persisted.pendingCve === undefined ? 'cleared' : 'pending'}`);
+    };
+    const req = {
+      async cnaWaitForCompletion() {
+        return { status: 'completed', conclusion: 'success', url: 'https://example/run/1' };
+      }
+    };
+    const report = {
+      id: '1',
+      cveIds: [],
+      pendingCve: { correlationId: 'corr-1', patchedVersions: ['24.18.1'] }
+    };
+
+    const content = { reports: [report] };
+    const reserved = await release.waitForReservedCve({ req, report, content });
+
+    assert.strictEqual(reserved, false);
+    assert.strictEqual(report.pendingCve, undefined);
+    assert.ok(events.some((event) =>
+      event.startsWith('error:Run corr-1 succeeded but returned no cve_id')));
+    assert.ok(events.includes('persist:cleared'));
+  });
+
+  it('resumes a pending reservation without dispatching again', async() => {
+    const events = [];
+    const release = new UpdateSecurityRelease(createCli(events));
+    release.getCnaTimeoutMs = () => 1_000;
+    const req = {
+      async cnaDispatch() {
+        throw new Error('must not dispatch while a reservation is pending');
+      },
+      async cnaWaitForCompletion(correlationId) {
+        events.push(`wait:${correlationId}`);
+        return { status: 'completed', conclusion: 'success', result: { cve_id: 'CVE-2026-2' } };
+      }
+    };
+    const report = {
+      id: '2',
+      cveIds: [],
+      affectedVersions: ['24.x'],
+      severity: { weakness_id: '1', cvss_vector_string: 'CVSS:3.0/AV:N' },
+      pendingCve: { correlationId: 'corr-2', patchedVersions: ['24.18.1'] }
+    };
+
+    const reserved = await release.requestReportCVE({
+      req,
+      report,
+      supportedVersions: [],
+      eolVersions: [],
+      versionCache: new Map(),
+      requestAll: true,
+      content: { reports: [report] },
+      cveSource: 'openjs-cna'
+    });
+
+    assert.strictEqual(reserved, true);
+    assert.deepStrictEqual(report.cveIds, ['CVE-2026-2']);
+    assert.deepStrictEqual(report.patchedVersions, ['24.18.1']);
+    assert.strictEqual(report.pendingCve, undefined);
+    assert.ok(events.includes('wait:corr-2'));
+    assert.ok(events.some((event) =>
+      event.startsWith('info:Resuming pending OpenJS CNA reservation for report 2')));
+  });
+
+  it('reserves through the OpenJS CNA instead of HackerOne when selected', async() => {
+    const events = [];
+    const cli = createCli(events);
+    cli.prompt = (message, options) => {
+      if (options?.questionType === 'input') return '24.18.0';
+      return true;
+    };
+    cli.promptRadio = (message, choices) => choices[0];
+    const release = new UpdateSecurityRelease(cli);
+    release.getCnaTimeoutMs = () => 1_000;
+    release.persistPendingCve = async() => { events.push('persist'); };
+    const req = {
+      async requestCVE() {
+        throw new Error('HackerOne cve_requests must not be called');
+      },
+      async cnaDispatch(operation) {
+        events.push(`dispatch:${operation}`);
+        return { correlation_id: 'corr-3' };
+      },
+      async cnaWaitForCompletion() {
+        return { status: 'completed', conclusion: 'success', result: { cve_id: 'CVE-2026-3' } };
+      }
+    };
+    const report = {
+      id: '3',
+      title: 'Third report',
+      link: 'https://hackerone.com/reports/3',
+      summary: 'Third summary',
+      cveIds: [],
+      affectedVersions: ['24.x'],
+      severity: { weakness_id: '1', cvss_vector_string: 'CVSS:3.0/AV:N' }
+    };
+
+    const reserved = await release.requestReportCVE({
+      req,
+      report,
+      supportedVersions: [{ major: 24, version: '24.18.0' }],
+      eolVersions: [],
+      versionCache: new Map(),
+      requestAll: true,
+      content: { reports: [report] },
+      cveSource: 'openjs-cna'
+    });
+
+    assert.strictEqual(reserved, true);
+    assert.deepStrictEqual(report.cveIds, ['CVE-2026-3']);
+    assert.deepStrictEqual(report.patchedVersions, ['24.18.1']);
+    assert.ok(events.includes('dispatch:reserve-cve'));
+    assert.ok(events.includes('persist'));
   });
 });
