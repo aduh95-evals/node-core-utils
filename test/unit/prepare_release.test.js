@@ -267,6 +267,30 @@ describe('prepare_release: loadReleaseProposal', () => {
   });
 });
 
+describe('prepare_release: stageReleaseProposalChangelog', () => {
+  it('does not fail when the release proposal cannot be fetched', async(t) => {
+    const changelog = path.join('doc', 'changelogs', 'CHANGELOG_V25.md');
+    nodeCheckout(t, { [changelog]: 'previous' });
+    const warnings = [];
+    const noop = () => {};
+    const release = releasePreparation({
+      cli: {
+        startSpinner: noop,
+        stopSpinner: noop,
+        warn: (msg) => warnings.push(msg),
+        SPINNER_STATUS: {}
+      },
+      versionComponents: { major: 25 },
+      proposalUpstreamRemote: 'does-not-exist',
+      releaseProposalCommit: 'abc123',
+      prUrl: 'https://github.com/nodejs/node/pull/12345'
+    });
+    assert.strictEqual(await release.stageReleaseProposalChangelog(), false);
+    assert.strictEqual(warnings.length, 1);
+    assert.strictEqual(fs.readFileSync(changelog, 'utf8'), 'previous');
+  });
+});
+
 describe('prepare_release: getPullRequestURLForLine', () => {
   const affectedVersions = {
     main: 'https://github.com/nodejs-private/node-private/pull/924',
