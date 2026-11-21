@@ -13,7 +13,8 @@ import ReleasePreparation, {
   filterAlphaReleaseCommits,
   formatMajorReleaseCommits,
   formatReleaseInfo,
-  formatSecurityNotableChanges
+  formatSecurityNotableChanges,
+  getReleaseDateFromTitle
 } from '../../lib/prepare_release.js';
 
 function nodeVersionH({ major, minor, patch, isRelease = 0, alpha }) {
@@ -181,6 +182,78 @@ describe('prepare_release: parsePullRequestURL', () => {
     assert.strictEqual(parsePullRequestURL(''), null);
     assert.strictEqual(parsePullRequestURL(undefined), null);
     assert.strictEqual(parsePullRequestURL('https://github.com/nodejs/node'), null);
+  });
+});
+
+describe('prepare_release: getReleaseDateFromTitle', () => {
+  it('extracts the date from a release commit title', () => {
+    assert.strictEqual(
+      getReleaseDateFromTitle('2026-11-25, Version 25.3.0 (Current)'),
+      '2026-11-25'
+    );
+    assert.strictEqual(
+      getReleaseDateFromTitle("2026-11-25, Version 24.12.0 'Krypton' (LTS)"),
+      '2026-11-25'
+    );
+  });
+
+  it('returns null for other titles', () => {
+    assert.strictEqual(getReleaseDateFromTitle('doc: fix typo'), null);
+    assert.strictEqual(getReleaseDateFromTitle(undefined), null);
+  });
+});
+
+describe('prepare_release: --prUrl', () => {
+  const prUrl = 'https://github.com/nodejs/node/pull/12345';
+  function fakeRequest(headRefName, messageHeadline) {
+    return {
+      async gql(name, variables) {
+        assert.strictEqual(name, 'ReleaseProposalPR');
+        assert.deepStrictEqual(variables, { prid: 12345, owner: 'nodejs', repo: 'node' });
+        return {
+          repository: {
+            pullRequest: {
+              headRefName,
+              commits: { nodes: [{ commit: { messageHeadline } }] }
+            }
+          }
+        };
+      }
+    };
+  }
+  function prepare({ releaseDate }) {
+    return releasePreparation({
+      newVersion: '25.3.0',
+      prUrl,
+      releaseProposal: { owner: 'nodejs', repo: 'node', number: 12345 },
+      hasExplicitReleaseDate: releaseDate != null,
+      defaultReleaseDate: releaseDate ?? '2026-11-21'
+    });
+  }
+
+  it('uses the date of the release commit as default release date', async() => {
+    const release = prepare({});
+    await release.loadReleaseProposal(
+      fakeRequest('v25.3.0-proposal', '2026-11-25, Version 25.3.0 (Current)'));
+    assert.strictEqual(release.defaultReleaseDate, '2026-11-25');
+  });
+
+  it('gives precedence to --releaseDate', async() => {
+    const release = prepare({ releaseDate: '2026-11-26' });
+    await release.loadReleaseProposal(
+      fakeRequest('v25.3.0-proposal', '2026-11-25, Version 25.3.0 (Current)'));
+    assert.strictEqual(release.defaultReleaseDate, '2026-11-26');
+  });
+
+  it('rejects PRs that are not the release proposal', async() => {
+    await assert.rejects(
+      prepare({}).loadReleaseProposal(
+        fakeRequest('some-branch', '2026-11-25, Version 25.3.0 (Current)')),
+      /is not the release proposal for 25\.3\.0/);
+    await assert.rejects(
+      prepare({}).loadReleaseProposal(
+        fakeRequest('v25.3.0-proposal', 'doc: fix typo')),
+      /is not a release commit/);
   });
 });
 

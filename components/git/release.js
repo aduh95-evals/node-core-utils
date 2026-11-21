@@ -35,6 +35,11 @@ const releaseOptions = {
               'push the tags and commits.',
     type: 'string',
   },
+  prUrl: {
+    describe: 'URL of the release proposal PR when --prepare is used. Its last commit sets ' +
+              'the default release date, and it fills the PR-URL of the release commit',
+    type: 'string'
+  },
   releaseDate: {
     describe: 'Default release date when --prepare is used. It must be YYYY-MM-DD',
     type: 'string'
@@ -89,6 +94,8 @@ export function builder(yargs) {
       'Prepare the first Alpha release of Node.js 27')
     .example('git node release --promote https://github.com/nodejs/node/pull/12345 https://github.com/nodejs/node/pull/54321',
       'Promote two prepared releases of Node.js with PR #12345 and #54321')
+    .example('git node release --prepare --newVersion=1.2.3 --prUrl=https://github.com/nodejs/node/pull/12345',
+      'Prepare a new release of Node.js tagged v1.2.3 for the proposal opened as PR #12345')
     .example('git node --prepare --startLTS',
       'Prepare the first LTS release');
 }
@@ -156,6 +163,11 @@ async function main(state, argv, cli, dir) {
         cli.error('Aborting release preparation process');
         return;
       }
+    }
+
+    if (release.prUrl) {
+      const credentials = await auth({ github: true });
+      await release.loadReleaseProposal(new Request(credentials));
     }
 
     return release.prepare();
