@@ -214,7 +214,7 @@ describe('prepare_release: loadReleaseProposal', () => {
           repository: {
             pullRequest: {
               headRefName,
-              commits: { nodes: [{ commit: { messageHeadline } }] }
+              commits: { nodes: [{ commit: { oid: 'abc123', messageHeadline } }] }
             }
           }
         };
@@ -237,6 +237,7 @@ describe('prepare_release: loadReleaseProposal', () => {
       fakeRequest('v25.3.0-proposal', '2026-11-25, Version 25.3.0 (Current)'), proposal);
     assert.strictEqual(release.defaultReleaseDate, '2026-11-25');
     assert.strictEqual(release.prUrl, prUrl);
+    assert.strictEqual(release.releaseProposalCommit, 'abc123');
   });
 
   it('resolves a PR number against the configured repository', async() => {

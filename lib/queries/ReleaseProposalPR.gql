@@ -5,6 +5,7 @@ query ReleaseProposalPR($prid: Int!, $owner: String!, $repo: String!) {
       commits(last: 1) {
         nodes {
           commit {
+            oid,
             messageHeadline
           }
         }
