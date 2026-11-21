@@ -35,11 +35,6 @@ const releaseOptions = {
               'push the tags and commits.',
     type: 'string',
   },
-  prUrl: {
-    describe: 'URL of the release proposal PR when --prepare is used. Its last commit sets ' +
-              'the default release date, and it fills the PR-URL of the release commit',
-    type: 'string'
-  },
   releaseDate: {
     describe: 'Default release date when --prepare is used. It must be YYYY-MM-DD',
     type: 'string'
@@ -83,7 +78,7 @@ export function builder(yargs) {
   yargsInstance = yargs;
   return yargs
     .options(releaseOptions).positional('prid', {
-      describe: 'PR number or URL of the release proposal to be promoted',
+      describe: 'PR number or URL of the release proposal to be prepared or promoted',
       type: 'string'
     })
     .example('git node release --prepare --security',
@@ -94,7 +89,7 @@ export function builder(yargs) {
       'Prepare the first Alpha release of Node.js 27')
     .example('git node release --promote https://github.com/nodejs/node/pull/12345 https://github.com/nodejs/node/pull/54321',
       'Promote two prepared releases of Node.js with PR #12345 and #54321')
-    .example('git node release --prepare --newVersion=1.2.3 --prUrl=https://github.com/nodejs/node/pull/12345',
+    .example('git node release --prepare --newVersion=1.2.3 https://github.com/nodejs/node/pull/12345',
       'Prepare a new release of Node.js tagged v1.2.3 for the proposal opened as PR #12345')
     .example('git node --prepare --startLTS',
       'Prepare the first LTS release');
@@ -145,8 +140,19 @@ async function wrapStash(fn) {
   }
 }
 
+function parsePRID(pr) {
+  const match = /^(?:https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/)?(\d+)(?:#.*)?$/.exec(pr);
+  if (!match) throw new Error('Invalid PR ID or URL', { cause: pr });
+  const [, owner, repo, prid] = match;
+  return { owner, repo, prid: Number(prid) };
+}
+
 async function main(state, argv, cli, dir) {
   if (state === PREPARE) {
+    if (argv.prid?.length > 1) {
+      throw new Error('Only one release proposal can be prepared at a time');
+    }
+    const proposal = argv.prid?.length ? parsePRID(argv.prid[0]) : null;
     const release = new ReleasePreparation(argv, cli, dir);
 
     await release.prepareLocalBranch();
@@ -165,9 +171,9 @@ async function main(state, argv, cli, dir) {
       }
     }
 
-    if (release.prUrl) {
+    if (proposal) {
       const credentials = await auth({ github: true });
-      await release.loadReleaseProposal(new Request(credentials));
+      await release.loadReleaseProposal(new Request(credentials), proposal);
     }
 
     return release.prepare();
@@ -196,9 +202,7 @@ async function main(state, argv, cli, dir) {
 
     const releases = [];
     for (const pr of argv.prid) {
-      const match = /^(?:https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/)?(\d+)(?:#.*)?$/.exec(pr);
-      if (!match) throw new Error('Invalid PR ID or URL', { cause: pr });
-      const [,owner, repo, prid] = match;
+      const { owner, repo, prid } = parsePRID(pr);
 
       if (
         owner &&
@@ -213,7 +217,7 @@ async function main(state, argv, cli, dir) {
       releases.push(await release.preparePromotion({
         owner: owner ?? release.owner,
         repo: repo ?? release.repo,
-        prid: Number(prid)
+        prid
       }));
     }
     return release.promote(releases);

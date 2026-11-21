@@ -203,7 +203,7 @@ describe('prepare_release: getReleaseDateFromTitle', () => {
   });
 });
 
-describe('prepare_release: --prUrl', () => {
+describe('prepare_release: loadReleaseProposal', () => {
   const prUrl = 'https://github.com/nodejs/node/pull/12345';
   function fakeRequest(headRefName, messageHeadline) {
     return {
@@ -221,11 +221,11 @@ describe('prepare_release: --prUrl', () => {
       }
     };
   }
+  const proposal = { owner: 'nodejs', repo: 'node', prid: 12345 };
   function prepare({ releaseDate }) {
     return releasePreparation({
       newVersion: '25.3.0',
-      prUrl,
-      releaseProposal: { owner: 'nodejs', repo: 'node', number: 12345 },
+      prUrl: null,
       hasExplicitReleaseDate: releaseDate != null,
       defaultReleaseDate: releaseDate ?? '2026-11-21'
     });
@@ -234,25 +234,34 @@ describe('prepare_release: --prUrl', () => {
   it('uses the date of the release commit as default release date', async() => {
     const release = prepare({});
     await release.loadReleaseProposal(
-      fakeRequest('v25.3.0-proposal', '2026-11-25, Version 25.3.0 (Current)'));
+      fakeRequest('v25.3.0-proposal', '2026-11-25, Version 25.3.0 (Current)'), proposal);
     assert.strictEqual(release.defaultReleaseDate, '2026-11-25');
+    assert.strictEqual(release.prUrl, prUrl);
+  });
+
+  it('resolves a PR number against the configured repository', async() => {
+    const release = prepare({});
+    await release.loadReleaseProposal(
+      fakeRequest('v25.3.0-proposal', '2026-11-25, Version 25.3.0 (Current)'),
+      { prid: 12345 });
+    assert.strictEqual(release.prUrl, prUrl);
   });
 
   it('gives precedence to --releaseDate', async() => {
     const release = prepare({ releaseDate: '2026-11-26' });
     await release.loadReleaseProposal(
-      fakeRequest('v25.3.0-proposal', '2026-11-25, Version 25.3.0 (Current)'));
+      fakeRequest('v25.3.0-proposal', '2026-11-25, Version 25.3.0 (Current)'), proposal);
     assert.strictEqual(release.defaultReleaseDate, '2026-11-26');
   });
 
   it('rejects PRs that are not the release proposal', async() => {
     await assert.rejects(
       prepare({}).loadReleaseProposal(
-        fakeRequest('some-branch', '2026-11-25, Version 25.3.0 (Current)')),
+        fakeRequest('some-branch', '2026-11-25, Version 25.3.0 (Current)'), proposal),
       /is not the release proposal for 25\.3\.0/);
     await assert.rejects(
       prepare({}).loadReleaseProposal(
-        fakeRequest('v25.3.0-proposal', 'doc: fix typo')),
+        fakeRequest('v25.3.0-proposal', 'doc: fix typo'), proposal),
       /is not a release commit/);
   });
 });
