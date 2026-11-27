@@ -364,9 +364,9 @@ async function applySecurityPatches(cli) {
 
   cli.startSpinner(`Fetching open PRs on ${owner}/${repo}...`);
   const { repository: { pullRequests: { nodes } } } = await req.gql('PRs', {
-    owner, repo, labels: [`v${nodeMajorVersion}.x`],
+    owner, repo, labels: [branch],
   });
-  cli.stopSpinner(`Fetched all PRs labeled for v${nodeMajorVersion}.x`);
+  cli.stopSpinner(`Fetched all PRs labeled for ${branch}`);
 
   for (const { affectedVersions, prURL, cveIds, patchedVersions } of reports) {
     if (!getAffectedVersionLines(affectedVersions).includes(`${nodeMajorVersion}.x`)) continue;
@@ -378,7 +378,7 @@ async function applySecurityPatches(cli) {
     let pr = nodes.find(({ url }) => url === prURL);
     if (!pr) {
       cli.info(
-        `${prURL} is not labelled for v${nodeMajorVersion}.x, there might be a backport PR.`
+        `${prURL} is not labelled for ${branch}, there might be a backport PR.`
       );
 
       cli.startSpinner('Fetching PR title to find a match...');
@@ -394,7 +394,7 @@ async function applySecurityPatches(cli) {
         );
         pr = nodes.find(({ number }) => number === prID);
         if (!pr) {
-          cli.error(`${prID} is not in the list of PRs labelled for v${nodeMajorVersion}.x`);
+          cli.error(`${prID} is not in the list of PRs labelled for ${branch}`);
           cli.info('The list of labelled PRs and vulnerabilities.json are fetched ' +
             'once at the start of the session; to refresh those, start a new NCU session');
           const response = await cli.prompt('Do you want to skip that CVE?',
@@ -404,7 +404,7 @@ async function applySecurityPatches(cli) {
         }
       }
     }
-    cli.ok(`${pr.url} is labelled for v${nodeMajorVersion}.x.`);
+    cli.ok(`${pr.url} is labelled for ${branch}.`);
 
     const backport = prURL !== pr.url;
 
