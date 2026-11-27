@@ -304,6 +304,7 @@ async function applySecurityPatches(cli) {
 
   let branch = `v${nodeMajorVersion}.x`;
   let stagingBranch = `${branch}-staging`;
+  let label = branch;
   const latestReleaseLine = getLatestAffectedReleaseLine(vulnerabilities);
   if (latestReleaseLine < nodeMajorVersion) {
     cli.info(`v${nodeMajorVersion}.x is not listed in vulnerabilities.json, ` +
@@ -312,6 +313,7 @@ async function applySecurityPatches(cli) {
       `Do you want to apply on main the patches for v${latestReleaseLine}.x?`)) {
       nodeMajorVersion = latestReleaseLine;
       branch = stagingBranch = 'main';
+      label = `v${latestReleaseLine}.x`;
     }
   }
 
@@ -364,9 +366,9 @@ async function applySecurityPatches(cli) {
 
   cli.startSpinner(`Fetching open PRs on ${owner}/${repo}...`);
   const { repository: { pullRequests: { nodes } } } = await req.gql('PRs', {
-    owner, repo, labels: [branch],
+    owner, repo, labels: [label],
   });
-  cli.stopSpinner(`Fetched all PRs labeled for ${branch}`);
+  cli.stopSpinner(`Fetched all PRs labeled for ${label}`);
 
   for (const { affectedVersions, prURL, cveIds, patchedVersions } of reports) {
     if (!getAffectedVersionLines(affectedVersions).includes(`${nodeMajorVersion}.x`)) continue;
@@ -378,7 +380,7 @@ async function applySecurityPatches(cli) {
     let pr = nodes.find(({ url }) => url === prURL);
     if (!pr) {
       cli.info(
-        `${prURL} is not labelled for ${branch}, there might be a backport PR.`
+        `${prURL} is not labelled for ${label}, there might be a backport PR.`
       );
 
       cli.startSpinner('Fetching PR title to find a match...');
@@ -394,7 +396,7 @@ async function applySecurityPatches(cli) {
         );
         pr = nodes.find(({ number }) => number === prID);
         if (!pr) {
-          cli.error(`${prID} is not in the list of PRs labelled for ${branch}`);
+          cli.error(`${prID} is not in the list of PRs labelled for ${label}`);
           cli.info('The list of labelled PRs and vulnerabilities.json are fetched ' +
             'once at the start of the session; to refresh those, start a new NCU session');
           const response = await cli.prompt('Do you want to skip that CVE?',
@@ -404,7 +406,7 @@ async function applySecurityPatches(cli) {
         }
       }
     }
-    cli.ok(`${pr.url} is labelled for ${branch}.`);
+    cli.ok(`${pr.url} is labelled for ${label}.`);
 
     const backport = prURL !== pr.url;
 
