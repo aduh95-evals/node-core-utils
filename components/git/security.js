@@ -11,7 +11,10 @@ import UpdateSecurityRelease from '../../lib/update_security_release.js';
 import SecurityBlog from '../../lib/security_blog.js';
 import SecurityAnnouncement from '../../lib/security-announcement.js';
 import { forceRunAsync } from '../../lib/run.js';
-import { getAffectedVersionLines } from '../../lib/security-release/security-release.js';
+import {
+  getAffectedVersionLines,
+  getLatestAffectedReleaseLine
+} from '../../lib/security-release/security-release.js';
 import { getPullRequestURLForLine } from '../../lib/prepare_release.js';
 
 export const command = 'security [options]';
@@ -289,21 +292,36 @@ async function landingSession(cli, req, prURL, argv, cveIds = undefined) {
   return false;
 }
 async function applySecurityPatches(cli) {
-  const { nodeMajorVersion } = await checkCwd({ nodeDir: process.cwd() });
-  const branch = `v${nodeMajorVersion}.x`;
+  let { nodeMajorVersion } = await checkCwd({ nodeDir: process.cwd() });
   const credentials = await auth({
     github: true
   });
   const req = new Request(credentials);
 
-  cli.info('N.B.: if there are commits on the staging branch that need to be included in the ' +
-    'security release, please rebase them manually and answer no to the following question');
+  const { owner, repo } = SECURITY_REPO;
+  const vulnerabilities = await fetchVulnerabilitiesDotJSON(cli, req);
+  const { releaseDate, reports, dependencies } = vulnerabilities;
+
+  let branch = `v${nodeMajorVersion}.x`;
+  let stagingBranch = `${branch}-staging`;
+  const latestReleaseLine = getLatestAffectedReleaseLine(vulnerabilities);
+  if (latestReleaseLine < nodeMajorVersion) {
+    cli.info(`v${nodeMajorVersion}.x is not listed in vulnerabilities.json, ` +
+      `the most recent affected release line is v${latestReleaseLine}.x.`);
+    if (await cli.prompt(
+      `Do you want to apply on main the patches for v${latestReleaseLine}.x?`)) {
+      nodeMajorVersion = latestReleaseLine;
+      branch = stagingBranch = 'main';
+    }
+  }
+
+  if (branch !== 'main') {
+    cli.info('N.B.: if there are commits on the staging branch that need to be included in ' +
+      'the security release, please rebase them manually and answer no to the following question');
+  }
   // Try reset to the public upstream
   const session = new Session(cli, process.cwd(), undefined, { branch });
   await session.tryResetBranch();
-
-  const { owner, repo } = SECURITY_REPO;
-  const { releaseDate, reports, dependencies } = await fetchVulnerabilitiesDotJSON(cli, req);
 
   let patchedVersion;
   const releaseLine = `${nodeMajorVersion}.x`;
@@ -321,19 +339,19 @@ async function applySecurityPatches(cli) {
     }
 
     const existingCommits = (await forceRunAsync('git',
-      ['--no-pager', 'log', `${session.upstream}/v${nodeMajorVersion}.x-staging`,
+      ['--no-pager', 'log', `${session.upstream}/${stagingBranch}`,
         '--grep', `^PR-URL: ${prURL}$`,
         '--format=%H %h %s'],
       { ignoreFailure: false, captureStdout: true })).trim().split('\n');
     if (existingCommits[0] === '') {
-      cli.error(`${prURL} was not found on ${session.upstream}/v${nodeMajorVersion}.x-staging.`);
-      cli.info('Please cherry-pick the adequate commits to the public staging branch.');
+      cli.error(`${prURL} was not found on ${session.upstream}/${stagingBranch}.`);
+      cli.info(`Please cherry-pick the adequate commits to ${session.upstream}/${stagingBranch}.`);
       cli.info('Skipping');
       cli.warn('The resulting HEAD will not be ready for a release proposal');
       continue;
     }
-    cli.info(`The following commit(s) have been found on ${session.upstream}/v${nodeMajorVersion
-      }.x-staging:\n${existingCommits.map(c => ` - ${c.slice(41)}`).join('\n')}`);
+    cli.info(`The following commit(s) have been found on ${session.upstream}/${stagingBranch
+      }:\n${existingCommits.map(c => ` - ${c.slice(41)}`).join('\n')}`);
     if (!await cli.prompt('Cherry-pick those for the current proposal?')) {
       cli.info('Skipping');
       cli.warn('The resulting HEAD will not be ready for a release proposal');
@@ -346,7 +364,7 @@ async function applySecurityPatches(cli) {
 
   cli.startSpinner(`Fetching open PRs on ${owner}/${repo}...`);
   const { repository: { pullRequests: { nodes } } } = await req.gql('PRs', {
-    owner, repo, labels: [branch],
+    owner, repo, labels: [`v${nodeMajorVersion}.x`],
   });
   cli.stopSpinner(`Fetched all PRs labeled for v${nodeMajorVersion}.x`);
 
@@ -393,6 +411,12 @@ async function applySecurityPatches(cli) {
     await landingSession(cli, req, prURL, { prid: pr.number, backport, ...SECURITY_REPO }, cveIds);
   }
   cli.ok('All patches are on the local HEAD!');
+  if (branch === 'main') {
+    cli.info('You can now build and test, and once the security release is out, ' +
+      'push the patches to main with the following command:');
+    cli.info(`git push ${session.upstream} HEAD:main`);
+    return;
+  }
   cli.info('You can now build and test, and create a proposal with the following commands:');
   cli.info(`git switch -C v${nodeMajorVersion}.x HEAD`);
   cli.info(`git node release --prepare --security --newVersion=${patchedVersion} ` +
